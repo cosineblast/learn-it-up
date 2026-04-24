@@ -1,5 +1,11 @@
 #!/bin/ruby
 
+# settings
+WEBROOT = '/tcc-learn-it-up'
+
+# execution
+ENV['WEBROOT'] = WEBROOT
+
 `mkdir -p build`
 `cp *.jpg *.pdf build`
 
@@ -13,9 +19,9 @@ for source_file in source_files do
   body_file = "build/#{basename}.body.html"
   target_file = "build/#{basename}.html"
 
-  `pandoc #{source_file} -o "#{body_file}"`
+  `pandoc --lua-filter="filter.lua" #{source_file} -o "#{body_file}"`
 
-  result = template.sub 'STUFF_GOES_HERE', `cat "#{body_file}"`
+  result = (template.gsub '$STUFF', `cat "#{body_file}"`).gsub '$WEBROOT', WEBROOT
 
   File.write(target_file, result)
 
