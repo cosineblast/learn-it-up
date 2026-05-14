@@ -1,7 +1,7 @@
 #!/bin/ruby
 
 # settings
-WEBROOT = '/tcc-learn-it-up'
+WEBROOT = '/learn-it-up'
 
 # execution
 ENV['WEBROOT'] = WEBROOT
