@@ -18,8 +18,23 @@ distintos do DanceDanceRevolution.
 Este trabalho tem como objetivo produzir o melhor programa de geração de níveis de Pump it Up
 até o momento, estudando a performance das arquiteturas LSTM (Working Memory Connections) e _transformer_.
 
+**Summary (machine translated):**
+
+Pump it Up is a rhythm game where the main goal is to use your feet to press keys on the
+floor arranged in a five-arrow pattern in time with the active music, following the arrows
+displayed vertically on the screen. This game is similar to DanceDanceRevolution, which uses four
+keys and is more popular in Japan and the United States, whereas Pump it Up is
+more famous in other regions of the world.
+
+Currently, there are multiple papers studying the feasibility of using machine learning to generate
+levels for DanceDanceRevolution, but none of them takes the opportunity to analyze the feasibility of machine learning
+for the game Pump it Up, which has mechanics, speeds, and level granularity distinct from those of DanceDanceRevolution.
+
+This work aims to produce the best Pump it Up level generation program to date,
+studying the performance of LSTM (Working Memory Connections) and transformer architectures.
+
 
 - **Proposta Inicial:** [aqui](/proposta.html)
+- **Repositório:** [github](https://github.com/cosineblast/learn-it-up)
 - **Monografia:** TODO 
-- **Repositório:** TODO
 	
