@@ -1,0 +1,98 @@
+<!-- remova esse link quando for gerar o pdf -->
+<p><a href="/learn-it-up/proposta.pdf">Versão PDF</a></p>
+<p>Meu nome é Renan Ribeiro Marcelino. Estou no quinto ano do
+Bacharelado em Ciência de Computação na Universidade de São Paulo, e
+este documento registra um projeto de pesquisa em Machine Learning do
+qual estou desenvolvendo.</p>
+<h2 id="dancedancerevolution-e-pump-it-up">DanceDanceRevolution e Pump
+it Up</h2>
+<p>DanceDanceRevolution e Pump it Up são duas franquias de jogos de
+ritmo populares, onde os jogadores apertam botões com seus pés em um
+tapete especial conforme uma música toca, com setas na tela indicando
+quais botões devem ser apertados. A principal diferença entre esses
+jogos é no layout do tapete, onde DanceDanceRevolution utiliza 4 teclas,
+e PumpItUp utiliza 5.</p>
+<figure>
+<img src="/learn-it-up/pump_coop.jpg"
+alt="Imagem 1: Duas pessoas jogando Pump it Up" />
+<figcaption aria-hidden="true"><strong>Imagem 1:</strong> Duas pessoas
+jogando Pump it Up</figcaption>
+</figure>
+<figure>
+<img src="/learn-it-up/ddr_coop.jpg"
+alt="Imagem 2: Duas pessoas jogando DanceDanceRevolution" />
+<figcaption aria-hidden="true"><strong>Imagem 2:</strong> Duas pessoas
+jogando DanceDanceRevolution</figcaption>
+</figure>
+<h2 id="aprendizado-de-coreografia">Aprendizado de Coreografia</h2>
+<p>Em 2017, o paper <a
+href="https://arxiv.org/abs/1703.06891">DanceDanceConvolution</a>
+introduziu o conceito de “aprender a coreografar”, que consiste no uso
+de machine learning para produzir uma coreografia de botões de Dance
+Dance Revolution, vulgo <em>chart</em>, a partir de um arquivo de música
+arbitrário. Este trabalho foi expandido por diferentes autores em 2019
+com o paper <a
+href="https://inria.hal.science/hal-02128628/file/472623_1_En_15_Chapter.pdf">DanceDanceGradation</a>
+para dar suporte a músicas de dificuldade baixa, e em 2025 com o paper
+<a href="https://arxiv.org/abs/2507.01644">DanceDanceConvLSTM</a> para
+experimentar com células Long Short Term Memory Convolucionais.</p>
+<p>Como é possível notar, esses papers todos trabalham em coreografar
+músicas do jogo DanceDanceRevolution, mas não consideram o jogo Pump it
+Up. Apesar de similares, a diferença de layout dos jogos traz diversas
+diferenças em tradições de <em>charts</em>, como a presença de padrões
+técnicos como, <em>spins</em> e <em>twists</em> e <em>brackets</em> no
+jogo de 5 teclas.</p>
+<p>Estudar a viabilidade das técnicas apresentadas no estado da arte de
+aprendizado de coreografias de DanceDanceRevolution para o PumpItUp é um
+trabalho que ainda não foi publicado.</p>
+<p>Além disso, Pump it Up apresenta um potencial adicional de pesquisa,
+comparado a DanceDanceRevolution: O projeto <a
+href="https://github.com/maxwshen/piu-analysis">piu-analysis</a> de Max
+Shen que consiste na classificação automática de todas as dificuldades
+de todas as músicas oficiais do jogo Pump it Up, classificando, para
+cada <em>chart</em>, quais são os principais padrões de setas que
+ocorrem nas músicas e qual a densidade de setas de cada seção da música.
+Esse dataset exclusivo de Pump it Up abre um potencial considerável para
+permitir uma geração mais precisa de charts de Pump. Este projeto já é
+utilizado no site <a href="https://www.piucenter.com/">piucenter.com</a>
+que permite que jogadores procurem níveis com características
+específicas que desejam treinar.</p>
+<figure>
+<img src="/learn-it-up/chart_dist.jpg"
+alt="Imagem 3: A distribuição dos níveis das músicas e densidade de notas (notas por segundo) das músicas de Pump it Up. O jogo pump it up apresenta mais granularidade de dificuldade do que o jogo de 4 teclas, o que introduz trabalho adicional na adaptação dos modelos existentes de DDR, uma vez que a dificuldade das músicas é utilizada como entrada para os modelos generativos." />
+<figcaption aria-hidden="true"><strong>Imagem 3:</strong> A distribuição
+dos níveis das músicas e densidade de notas (notas por segundo) das
+músicas de Pump it Up. O jogo pump it up apresenta mais granularidade de
+dificuldade do que o jogo de 4 teclas, o que introduz trabalho adicional
+na adaptação dos modelos existentes de DDR, uma vez que a dificuldade
+das músicas é utilizada como entrada para os modelos
+generativos.</figcaption>
+</figure>
+<p>Outro ponto importante, é sobre as técnicas e tecnologias aplicadas
+nos papers que estudam DanceDanceRevolution até agora. Em geral, todos
+os papers mencionados utilizam LSTM como fundação de implementação. A
+arquitetura de Transformer anda demonstrando resultados excepcionais em
+diversas outras tarefas de geração de sequências. Um <a
+href="https://arxiv.org/abs/2311.13687">paper</a> de 2023 já começa a
+trabalhar no uso de transformers para estas tarefas.</p>
+<p>Além disso, em todos esses papers, o algoritmo de previsão da ordem
+das setas não leva em consideração as informações musicais de notas da
+música (apenas usam como entrada informações de timing). Nos papers
+utilizando LSTM, a introdução dessas informações aumentou o overfitting
+dos modelos, mas isso não foi trabalhado no paper de 2023 que inclui o
+uso de transformers.</p>
+<h2 id="proposta">Proposta</h2>
+<p>Com isso, apresento um projeto de pesquisa que consiste em:</p>
+<ul>
+<li>Estudar e documentar a aplicabilidade de técnicas existentes de
+geração de <em>charts</em> de DanceDanceRevolution para Pump it Up.</li>
+<li>Estudar a aplicabilidade de informações musicais (além de timing) em
+arquiteturas de transformers na geração de charts de Pump it Up.</li>
+<li>Tentar produzir o melhor gerador de charts de pump it up (até o
+momento) com auxílio do dataset providenciado do projeto
+piu-analysis.</li>
+<li>Providenciar acesso fácil (por meio de um website) ao modelo de
+geração de charts, e coletar feedback dos jogadores sobre os charts
+gerados, assim como o paper DanceDanceConvolution original faz, e
+utilizar isto para determinar a performance dos resultados obtidos.</li>
+</ul>
