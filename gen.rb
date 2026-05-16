@@ -7,7 +7,7 @@ WEBROOT = '/learn-it-up'
 ENV['WEBROOT'] = WEBROOT
 
 `mkdir -p build`
-`cp *.jpg *.pdf build`
+`cp *.jpg *.pdf *.css build`
 
 source_files = `ls *.md`.split("\n")
 

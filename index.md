@@ -1,8 +1,11 @@
 
+Trabalho de Conclusão de Curso do Bacharelado em Ciência da Computação
+
 - **Aluno:** Renan Ribeiro Marcelino
 - **Supervisor:** Ronaldo Fumio Hashimoto
 
-**Resumo:**
+
+# Resumo
 
 Pump it Up é um jogo de ritmo onde o objetivo é usar os pés
 para apertar teclas no chão em formato de cinco setas com o rítmo
@@ -18,7 +21,7 @@ distintos do DanceDanceRevolution.
 Este trabalho tem como objetivo produzir o melhor programa de geração de níveis de Pump it Up
 até o momento, estudando a performance das arquiteturas LSTM (Working Memory Connections) e _transformer_.
 
-**Summary (machine translated):**
+# Summary 
 
 Pump it Up is a rhythm game where the main goal is to use your feet to press keys on the
 floor arranged in a five-arrow pattern in time with the active music, following the arrows
@@ -33,8 +36,9 @@ for the game Pump it Up, which has mechanics, speeds, and level granularity dist
 This work aims to produce the best Pump it Up level generation program to date,
 studying the performance of LSTM (Working Memory Connections) and transformer architectures.
 
+# Links
 
-- **Proposta Inicial:** [aqui](/proposta.html)
-- **Repositório:** [github](https://github.com/cosineblast/learn-it-up)
-- **Monografia:** TODO 
+- [**Proposta Inicial**](/proposta.html)
+- [**Repositório**](https://github.com/cosineblast/learn-it-up)
+- [**Logs de Desenvolvimento**](/journal.html)
 	

@@ -1,7 +1,10 @@
 
-### 12/05/2026: 
-- Renamed repo to learn-it-up (and set up a redirection repo page on tcc-learn-it-up)
+# Logs Journal
 
+### 12/05/2026: 
+
+
+- Renamed repo to learn-it-up (and set up a redirection repo page on tcc-learn-it-up)
 - Startd trying to run original dance dance convolution repository, but failed once
 realized that the project uses both tensorflow and python 2, which is a pain in the ass which I don't want to deal with right now. 
 I'll be running instead Dance Dance Conv LSTM aka [DDCL](https://github.com/miguelomalley/DDCL).
@@ -29,4 +32,6 @@ IDEA:
 and [residual connections in LSTMs](https://arxiv.org/abs/1701.03360)
 To consider this, must search on existing applications of these to LSTMs in other papers to consider results.
 
+### 16/05/2026:
 
+- Reworked website UI
