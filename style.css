@@ -10,7 +10,6 @@
 }
 
 nav {
-
   margin-bottom: 1rem;
 
   * {
@@ -80,6 +79,9 @@ main {
     margin-bottom: 2rem;
   }
 
+  img {
+    max-width: 50vw;
+  }
 }
 
 footer {

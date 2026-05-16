@@ -4,7 +4,6 @@ Trabalho de Conclusão de Curso do Bacharelado em Ciência da Computação
 - **Aluno:** Renan Ribeiro Marcelino
 - **Supervisor:** Ronaldo Fumio Hashimoto
 
-
 # Resumo
 
 Pump it Up é um jogo de ritmo onde o objetivo é usar os pés
