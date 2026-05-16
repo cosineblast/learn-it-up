@@ -35,6 +35,7 @@ for the game Pump it Up, which has mechanics, speeds, and level granularity dist
 This work aims to produce the best Pump it Up level generation program to date,
 studying the performance of LSTM (Working Memory Connections) and transformer architectures.
 
+
 # Links
 
 - [**Proposta Inicial**](/proposta.html)
