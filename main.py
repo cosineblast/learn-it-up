@@ -34,7 +34,7 @@ import msdparser
 import itertools
 from collections import namedtuple
 
-STEPFILE_KEYS = {'TITLE', 'ARTIST'}
+STEPFILE_KEYS = {'TITLE', 'ARTIST', 'OFFSET', 'BPMS'}
 
 CHART_KEYS = {'NOTES', 'OFFSET', 'BPMS', 'DESCRIPTION', 'STOPS', 'DELAYS', 'WARPS', 'TIMESIGNATURES', 'FAKES'}
 
@@ -45,7 +45,8 @@ StepFile = namedtuple('StepFile', ['info', 'charts'])
 def main():
     # filename = 'Beethoven_Virus.ssc'
     # filename = 'BRAIN_POWER.ssc'
-    filename = 'Switronic.ssc'
+    # filename = 'Switronic.ssc'
+    filename = 'BarbersMadness.ssc'
 
     print('Reading file {}'.format(filename))
 
@@ -62,7 +63,8 @@ def is_applicable_chart(chart: Chart):
         'D' not in chart.DESCRIPTION and
         'QUEST' not in chart.DESCRIPTION and
         'PRO' not in chart.DESCRIPTION and
-        'JUMP' not in chart.DESCRIPTION)
+        'JUMP' not in chart.DESCRIPTION and
+        'HIDDEN' not in chart.DESCRIPTION)
 
     # TODO: Implement gimmick filtering
     delay_ok = len(chart.DELAYS) == 0
@@ -88,7 +90,7 @@ def parse_ssc(filename: str):
         for rows in all_chart_rows
     ]
 
-    fill_default_chart_values(charts)
+    fill_default_chart_values(charts, stepfile_info, filename)
 
     for chart in charts:
         parse_chart_strings(chart)
@@ -107,8 +109,10 @@ def parse_chart_strings(chart: dict):
 
     chart['NOTES'] = parse_notes(chart['NOTES'])
 
-    # TODO: handle charts with 'INFOBAR TITLE' in the name like switronic
-
+    # Songs that have titles attached have INFOBAR TITLE in their descriptions,
+    # but they're still valid, so we just remove the INFOBAR TITLE thing
+    if chart['DESCRIPTION'].endswith('INFOBAR TITLE'):
+        chart['DESCRIPTION'] = chart['DESCRIPTION'][0:-len('INFOBAR TITLE')]
 
 
 def parse_notes(notes):
@@ -125,23 +129,25 @@ def parse_equals_pair_list(string):
     pairs = [tuple([float(value) for value in item]) for item in items] 
     return pairs
 
-def fill_default_chart_values(charts):
+def fill_default_chart_values(charts, stepfile_info, filename):
     default_chart_values = {
+         'OFFSET': stepfile_info['OFFSET'],
+         'BPMS': stepfile_info['BPMS'],
          'DESCRIPTION': 'NONE',
-         'STOPS': [],
-         'DELAYS': [],
-         'WARPS': [],
-         'TIMESIGNATURES': [],
-         'FAKES': []
+         'STOPS': '',
+         'DELAYS': '',
+         'WARPS': '',
+         'TIMESIGNATURES': '',
+         'FAKES': ''
     }
 
-    for chart in charts:
+    for index, chart in enumerate(charts):
         for key in CHART_KEYS:
             if key not in chart:
                 if key in default_chart_values:
                     chart[key] = default_chart_values[key]
                 else:
-                    raise 'A chart in the file {} does not have the required key {}'.format(filename, key)
+                    raise Exception('The chart {} in the file {} does not have the required key {}'.format(index, filename, key))
 
 def split_chart_blocks(content):
     return [list(block)
