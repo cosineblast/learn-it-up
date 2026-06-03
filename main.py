@@ -38,8 +38,9 @@ import glob
 import re
 import os
 import json
+import random
+import itertools
 from pathlib import Path
-
 
 def main():
     args = cli_parser().parse_args()
@@ -60,6 +61,8 @@ def main():
         case 'parse_all':
             parse_all()
 
+        case 'partition':
+            compute_partitions(args.seed)
         case command:
             misc_commands.print("Invalid command '{}'".format(command))
 
@@ -85,9 +88,12 @@ def cli_parser():
 
     parse_all = subparsers.add_parser('parse_all', help='Parse all charts in the data/songs into data/ssc_json')
 
+    partition = subparsers.add_parser('partition', help='Compute training test and validation partitions' )
+    partition.add_argument('--seed', default=42, type=int) 
     return parser
 
-# This command parses all the SSC files for the training dataset, it:
+# This command parses all the SSC files for the model's dataset.
+# it:
 # - parses all SSC files in data/songs
 # - filters out charts that are considered invalid (e.g containing stops or warps)
 # - finds absolute BPM information for all these charts
@@ -111,7 +117,7 @@ def parse_all():
         
         charts += [new_chart for chart in charts for new_chart in generate_permutations(chart)]
 
-        destination_path = get_destination_path_for_ssc(file)
+        destination_path = _get_destination_path_for_ssc(file)
 
         print('>>> Saving parsed result to', destination_path)
         print()
@@ -121,8 +127,41 @@ def parse_all():
         with open(destination_path, 'w') as f:
             json.dump(content, f)
 
+# This command creates a  file
+# data/partitions.json containing information about which files are in which
+# dataset partitions: training, validation and test
+def compute_partitions(seed):
 
-def get_destination_path_for_ssc(filepath):
+    random.seed(seed)
+
+    ratios = [8, 1, 1]
+    partitions = ['training', 'validation', 'testing']
+
+    prefix_sum_ratios = list(itertools.accumulate(ratios))
+
+    # This makes so that 8/10 of values get training, 1/10 get validation and 1/10 get testing
+    def get_partition_for_index(index):
+        remainder = index % prefix_sum_ratios[-1]
+
+        for partition, ratio in zip(partitions, prefix_sum_ratios):
+            if remainder < ratio:
+                return partition
+
+    files_per_partition = {partition:[] for partition in partitions}
+
+    all_jsons = glob.glob('data/parsed/*.json')
+
+    random.shuffle(all_jsons)
+
+    for i, file in enumerate(all_jsons):
+        files_per_partition[get_partition_for_index(i)].append(file)
+
+    with open('data/partitions.json', 'w') as f:
+        json.dump(files_per_partition, f, indent=2)
+
+
+
+def _get_destination_path_for_ssc(filepath):
     def sanitize_name(name):
         without_prefix = None
 
