@@ -31,98 +31,37 @@
 
 import ssc_util
 import audio_util
+import misc_commands
 
 import argparse
-import pickle
-
+import glob
+import re
+import os
 import json
+from pathlib import Path
+
 
 def main():
     args = cli_parser().parse_args()
 
     match args.command:
         case 'inspect':
-            inspect_chart(args.filename)
+            misc_commands.inspect_chart(args.filename)
 
         case 'simulate':
-            simulate_chart(args.filename, args.chart)
+            misc_commands.simulate_chart(args.filename, args.chart)
 
         case 'extract_single':
-            extract_single(args.input_file, args.output_file)
+            misc_commands.extract_single(args.input_file, args.output_file)
 
         case 'parse_single':
-            parse_single(args.input_file, args.output_file)
+            misc_commands.parse_single(args.input_file, args.output_file)
+
+        case 'parse_all':
+            parse_all()
 
         case command:
-            print("Invalid command '{}'".format(command))
-
-
-def inspect_chart(filename: str):
-    print('Reading file {}'.format(filename))
-
-    stepfile = ssc_util.parse_ssc(filename)
-
-
-    for key in ['TITLE', 'ARTIST']:
-        print('{}: {}'.format(key, stepfile.info[key]))
-
-    charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
-
-    print('available charts:', [chart.DESCRIPTION for chart in charts])
-
-
-def simulate_chart(filename: str, chart_name):
-    print('Reading file {}'.format(filename))
-
-    stepfile = ssc_util.parse_ssc(filename)
-
-    charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
-
-    if chart_name is None or chart_name == '':
-        print('Available charts:', [chart.DESCRIPTION for chart in charts])
-        chart_name = input('Chart to play:')
-
-    for chart in charts:
-        if chart.DESCRIPTION == chart_name:
-            info = ssc_util.compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES)
-            ssc_util.run_chart(info)
-
-def extract_single(source, destination):
-    print('Extracting features for {} into {}'.format(source, destination))
-
-    loader = audio_util.AudioFeatureLoader(use_tqdm=True)
-
-    features = loader.load(source)
-
-    print('feature shape:', features.shape)
-
-    with open(destination, 'wb') as f:
-        pickle.dump(features, f)
-
-def parse_single(source, destination):
-    print('Parsing SSC file {} into {}'.format(source, destination))
-
-    stepfile = ssc_util.parse_ssc(source)
-
-    convert_chart = lambda chart: ({
-        'description': chart.DESCRIPTION,
-        'notes': chart.NOTES,
-        'offset': chart.OFFSET,
-        'bpms': chart.BPMS,
-    })
-
-    charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
-
-    info = {
-        'title': stepfile.info['TITLE'],
-        'artist': stepfile.info['ARTIST'],
-        'music': stepfile.info['MUSIC'],
-        'offset': stepfile.info['OFFSET'],
-        'charts': [convert_chart(chart) for chart in charts]
-    }
-
-    with open(destination, 'w') as f:
-        json.dump(info, f, indent=2)
+            misc_commands.print("Invalid command '{}'".format(command))
 
 def cli_parser():
     parser = argparse.ArgumentParser()
@@ -144,7 +83,90 @@ def cli_parser():
     parse_single.add_argument('input_file')
     parse_single.add_argument('output_file')
 
+    parse_all = subparsers.add_parser('parse_all', help='Parse all charts in the data/songs into data/ssc_json')
+
     return parser
+
+# This command parses all the SSC files for the training dataset, it:
+# - parses all SSC files in data/songs
+# - filters out charts that are considered invalid (e.g containing stops or warps)
+# - finds absolute BPM information for all these charts
+# - generates the three mirrored versions of the charts (horizontal, vertical, horizontal+vertical)
+# - saves the result to data/json_ssc/${pack_name}_${song_title}.ssc.json
+def parse_all():
+    print('LET THE BASS KICK')
+
+    sscs = sorted(glob.glob('data/songs/**/*.ssc', recursive=True))
+
+    print('About to parse {} .ssc files'.format(len(sscs)))
+
+    os.makedirs('data/parsed', exist_ok=True)
+
+    for file in sscs:
+        print('<<< Parsing SSC file', file)
+
+        stepfile = ssc_util.parse_ssc(file)
+
+        charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
+        
+        charts += [new_chart for chart in charts for new_chart in generate_permutations(chart)]
+
+        destination_path = get_destination_path_for_ssc(file)
+
+        print('>>> Saving parsed result to', destination_path)
+        print()
+
+        content = misc_commands.stepfile_to_dicts(stepfile._replace(charts=charts))
+
+        with open(destination_path, 'w') as f:
+            json.dump(content, f)
+
+        break
+
+
+def get_destination_path_for_ssc(filepath):
+    def sanitize_name(name):
+        without_prefix = None
+
+        # Remove '123 - ' prefix
+        match re.findall('^([0-9]+ - )(.+)$', name):
+            case [(_, suffix)]: without_prefix = suffix
+            case _: without_prefix = name
+
+        return str(without_prefix).replace(' ', '_')
+        
+
+    path = Path(filepath)
+    pack_name = sanitize_name(path.parents[1].name)
+    filename = sanitize_name(path.name)
+
+    result = Path('data/parsed/') / Path(pack_name + '___' + filename + '.json')
+
+    return result
+
+def generate_permutations(chart):
+    # down left, up left, middle, up right, down right
+    dl, ul, m, ur, dr = 0, 1, 2, 3, 4
+
+    vertical    = { dl: ul, ul: dl, m: m, ur: dr, dr: ur }
+    horizontal  = { dl: dr, ul: ur, m: m, ur: ul, dr: dl }
+
+    permute = lambda step, permutation: [step[permutation[i]] for i in range(5)]
+
+    apply = lambda permutation: (
+        [[permute(step, permutation) for step in measure] for measure in chart.NOTES]
+    )
+
+    return [
+        chart._replace(DESCRIPTION=chart.DESCRIPTION+ name, NOTES=apply(permutation))
+        for permutation, name in [
+            (vertical, '_V'),
+            # TODO: apply horizontal flip on low level charts
+            # (horizontal, '_H'),
+        ]
+    ]
+
+    
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,37 @@
 
 # Utilities for parsing and analyzing SSC files
 
+
+# A ssc file is a sequence of a bunch of key value pairs
+# of the form #KEY:VALUE;
+# 
+# The first key of a file is VERSION (we expect 0.81)
+# then, the file will contain several attributes about all the charts contained in the file
+# such as song name, song author, genre, expected bpm, audio file, background video file.
+#
+# After the overall information about the file, comes the information about each chart.
+# Each chart starts with the key NOTEDATA and an empty value, followed by the chart data.
+# The most important ones are OFFSET, BPMS (Beats Per Minute) and NOTES.
+#
+# - NOTES is a newline separated
+# list of numbers representing the steps at each position. The notes value
+# also has lines containing a single comma separating measures.
+#
+# - OFFSET is a number that tells how much time (in seconds) should the music audio be displaced
+# to align with the chart.
+#
+# - BPMS is a list of pairs informing the moments of BPM changes in the songs. The list
+# items are separated by commas, and the pair are of the form TIME=BPM.
+#
+# For visual gimmicks, the main keys are STOPS, DELAY, WARP, TIMESIGNATURES,
+# TICKCOUNTS, COMBOS, SPEEDS, SCROLLS and FAKES.
+# Out of these, SPEEDS and SCROLLS do not affect note timing.
+#
+# LASTSECONDHINT is used by the game to figure out the song length in seconds.
+
+# There is a project that implements parsing ssc files more conveniently, but it uses a
+# broken python dependency fs, so we use this stream-based parser instead.
+
 import msdparser
 import itertools
 import time
