@@ -30,8 +30,11 @@
 # broken python dependency fs, so we use this stream-based parser instead.
 
 import ssc_util
+import audio_util
+
 import argparse
 import pickle
+
 
 def main():
     args = cli_parser().parse_args()
@@ -44,7 +47,7 @@ def main():
             simulate_chart(args.filename, args.chart)
 
         case 'extract_single':
-            extract_features(args.filename)
+            extract_single(args.input_file, args.output_file)
 
         case command:
             print("Invalid command '{}'".format(command))
@@ -80,8 +83,17 @@ def simulate_chart(filename: str, chart_name):
             info = ssc_util.compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES)
             ssc_util.run_chart(info)
 
-def extract_features(filename):
-    raise Exception('TODO')
+def extract_single(source, destination):
+    print('Extracting features for {} into {}'.format(source, destination))
+
+    loader = audio_util.AudioFeatureLoader(use_tqdm=True)
+
+    features = loader.load(source)
+
+    print('feature shape:', features.shape)
+
+    with open(destination, 'wb') as f:
+        pickle.dump(features, f)
     
 
 def cli_parser():
@@ -97,7 +109,8 @@ def cli_parser():
     simulate.add_argument('--chart', default=None)
 
     extract = subparsers.add_parser('extract_single', help='Extract audio information from file')
-    extract.add_argument('filename')
+    extract.add_argument('input_file')
+    extract.add_argument('output_file')
 
     return parser
 
