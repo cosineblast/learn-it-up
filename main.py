@@ -41,6 +41,7 @@ import json
 import random
 import itertools
 from pathlib import Path
+import pickle
 
 def main():
     args = cli_parser().parse_args()
@@ -61,10 +62,13 @@ def main():
         case 'parse_all':
             parse_all()
 
+        case 'extract_all':
+            extract_all()
+
         case 'partition':
             compute_partitions(args.seed)
         case command:
-            misc_commands.print("Invalid command '{}'".format(command))
+            print("Invalid command '{}'".format(command))
 
 def cli_parser():
     parser = argparse.ArgumentParser()
@@ -88,8 +92,11 @@ def cli_parser():
 
     parse_all = subparsers.add_parser('parse_all', help='Parse all charts in the data/songs into data/ssc_json')
 
+    extract_all = subparsers.add_parser('extract_all', help='Extract audio information from all files in data/ssc_json' )
+
     partition = subparsers.add_parser('partition', help='Compute training test and validation partitions' )
     partition.add_argument('--seed', default=42, type=int) 
+
     return parser
 
 # This command parses all the SSC files for the model's dataset.
@@ -122,10 +129,45 @@ def parse_all():
         print('>>> Saving parsed result to', destination_path)
         print()
 
-        content = misc_commands.stepfile_to_dicts(stepfile._replace(charts=charts))
+        content = ssc_util.stepfile_to_dicts(stepfile._replace(charts=charts), file)
 
         with open(destination_path, 'w') as f:
             json.dump(content, f)
+
+# This command extracts features for all song files
+def extract_all():
+    print('JOOOOOOOOOOO')
+
+    ssc_jsons = sorted(glob.glob('data/parsed/*.json'))
+
+    print('About to load {} audio files'.format(len(ssc_jsons)))
+
+    os.makedirs('data/features', exist_ok=True)
+
+    for file in ssc_jsons:
+        print('<<< Reading JSON stepfile', file)
+
+        with open(file, 'r') as f:
+            metadata = json.load(f)
+
+        source = metadata['music']
+        destination = _get_destination_path_for_features(file)
+
+        print('>>> Extracting features for {} into {}...'.format(source, destination))
+
+        loader = audio_util.AudioFeatureLoader(use_tqdm=False)
+
+        features = loader.load(source)
+
+        with open(destination, 'wb') as f:
+            pickle.dump(features, f)
+
+        print('>>> OK!')
+
+
+    
+    pass
+    
 
 # This command creates a  file
 # data/partitions.json containing information about which files are in which
@@ -180,6 +222,11 @@ def _get_destination_path_for_ssc(filepath):
     result = Path('data/parsed/') / Path(pack_name + '___' + filename + '.json')
 
     return result
+
+def _get_destination_path_for_features(json_filepath):
+    assert str(json_filepath).endswith('.ssc.json')
+    return Path('data/features') / (Path(Path(json_filepath).stem).stem + '.pkl')
+
 
 def generate_permutations(chart):
     # down left, up left, middle, up right, down right

@@ -35,7 +35,7 @@
 import msdparser
 import itertools
 import time
-
+from pathlib import Path
 from collections import namedtuple
 from typing import NamedTuple
 
@@ -260,3 +260,20 @@ def split_chart_blocks(content):
             for is_notedata_row, block in itertools.groupby(content, lambda row: row.key == 'NOTEDATA')
             if not is_notedata_row]
  
+def stepfile_to_dicts(stepfile, stepfile_path):
+
+    chart_to_dict = lambda chart: ({
+        'description': chart.DESCRIPTION,
+        'notes': chart.NOTES,
+        'offset': chart.OFFSET,
+        'bpms': chart.BPMS,
+    })
+
+    return {
+        'title': stepfile.info['TITLE'],
+        'artist': stepfile.info['ARTIST'],
+        'music': str((Path(stepfile_path).parent / Path(stepfile.info['MUSIC']).name).resolve()),
+        'offset': stepfile.info['OFFSET'],
+        'charts': [chart_to_dict(chart) for chart in stepfile.charts]
+    }
+

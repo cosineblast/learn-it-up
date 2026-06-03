@@ -57,27 +57,10 @@ def parse_single(source, destination):
 
     charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
 
-    content_to_write = stepfile_to_dicts(stepfile._replace(charts=charts))
+    content_to_write = ssc_utils.stepfile_to_dicts(stepfile._replace(charts=charts), source)
 
     with open(destination, 'w') as f:
         json.dump(content_to_write, f, indent=2)
 
-
-def stepfile_to_dicts(stepfile):
-
-    chart_to_dict = lambda chart: ({
-        'description': chart.DESCRIPTION,
-        'notes': chart.NOTES,
-        'offset': chart.OFFSET,
-        'bpms': chart.BPMS,
-    })
-
-    return {
-        'title': stepfile.info['TITLE'],
-        'artist': stepfile.info['ARTIST'],
-        'music': os.path.abspath(stepfile.info['MUSIC']),
-        'offset': stepfile.info['OFFSET'],
-        'charts': [chart_to_dict(chart) for chart in stepfile.charts]
-    }
 
     
