@@ -11,13 +11,13 @@ import os
 def inspect_chart(filename: str):
     print('Reading file {}'.format(filename))
 
-    stepfile = ssc_util.parse_ssc(filename)
+    stepfile = ssc_util.load_ssc(filename)
 
 
     for key in ['TITLE', 'ARTIST']:
         print('{}: {}'.format(key, stepfile.info[key]))
 
-    charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
+    charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart, stepfile_name=stepfile.info['TITLE'])]
 
     print('available charts:', [chart.DESCRIPTION for chart in charts])
 
@@ -25,7 +25,7 @@ def inspect_chart(filename: str):
 def simulate_chart(filename: str, chart_name):
     print('Reading file {}'.format(filename))
 
-    stepfile = ssc_util.parse_ssc(filename)
+    stepfile = ssc_util.load_ssc(filename)
 
     charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
 
@@ -53,7 +53,7 @@ def extract_single(source, destination):
 def parse_single(source, destination):
     print('Parsing SSC file {} into {}'.format(source, destination))
 
-    stepfile = ssc_util.parse_ssc(source)
+    stepfile = ssc_util.load_ssc(source)
 
     charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
 

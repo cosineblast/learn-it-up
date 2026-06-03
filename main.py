@@ -105,7 +105,7 @@ def parse_all():
     for file in sscs:
         print('<<< Parsing SSC file', file)
 
-        stepfile = ssc_util.parse_ssc(file)
+        stepfile = ssc_util.load_ssc(file)
 
         charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
         
@@ -120,8 +120,6 @@ def parse_all():
 
         with open(destination_path, 'w') as f:
             json.dump(content, f)
-
-        break
 
 
 def get_destination_path_for_ssc(filepath):

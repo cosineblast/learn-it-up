@@ -145,7 +145,7 @@ def compute_segment_durations(bpms):
 def bpm_to_spb(bpm):
     return 60.0 / bpm
 
-def is_applicable_chart(chart: Chart):
+def is_applicable_chart(chart: Chart, stepfile_name=None):
     name_ok = ('UCS' not in chart.DESCRIPTION and
         not chart.DESCRIPTION.startswith('D') and
         'D' not in chart.DESCRIPTION and
@@ -161,10 +161,27 @@ def is_applicable_chart(chart: Chart):
     stop_ok = len(chart.STOPS) == 0
     fake_ok = len(chart.FAKES) == 0
 
-    return name_ok and delay_ok and warp_ok and time_sig_ok
+    notes_ok = False
+
+    def check_notes_ok():
+        # 0 is idle, 1 is hit, 2 is start hold, 3 is end hold
+        # xyzXYZ are for coop
+        expected_notes = set('0123xyzXYZ') 
+
+        for measure in chart.NOTES:
+            for step in measure:
+                if any((value not in expected_notes for value in step)):
+                    if stepfile_name is not None:
+                        print('WARNING: Chart {} of {} has invalid step {}'.format(chart.DESCRIPTION, stepfile_name, step))
+                    return False
+
+        return True
+                
+
+    return check_notes_ok() and name_ok and delay_ok and warp_ok and time_sig_ok
 
 
-def parse_ssc(filename: str) -> StepFile:
+def load_ssc(filename: str) -> StepFile:
     with open(filename) as f:
         content = msdparser.parse_msd(file=f)
         blocks = split_chart_blocks(content)
