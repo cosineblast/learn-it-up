@@ -8,7 +8,7 @@ import time
 from collections import namedtuple
 from typing import NamedTuple
 
-STEPFILE_KEYS = {'TITLE', 'ARTIST', 'OFFSET', 'BPMS', 'TIMESIGNATURES'}
+STEPFILE_KEYS = {'TITLE', 'ARTIST', 'MUSIC', 'OFFSET', 'BPMS', 'TIMESIGNATURES'}
 
 CHART_KEYS = {'NOTES', 'OFFSET', 'BPMS', 'DESCRIPTION', 'STOPS', 'DELAYS', 'WARPS', 'TIMESIGNATURES', 'FAKES'}
 

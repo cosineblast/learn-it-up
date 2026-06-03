@@ -35,6 +35,7 @@ import audio_util
 import argparse
 import pickle
 
+import json
 
 def main():
     args = cli_parser().parse_args()
@@ -48,6 +49,9 @@ def main():
 
         case 'extract_single':
             extract_single(args.input_file, args.output_file)
+
+        case 'parse_single':
+            parse_single(args.input_file, args.output_file)
 
         case command:
             print("Invalid command '{}'".format(command))
@@ -94,7 +98,31 @@ def extract_single(source, destination):
 
     with open(destination, 'wb') as f:
         pickle.dump(features, f)
-    
+
+def parse_single(source, destination):
+    print('Parsing SSC file {} into {}'.format(source, destination))
+
+    stepfile = ssc_util.parse_ssc(source)
+
+    convert_chart = lambda chart: ({
+        'description': chart.DESCRIPTION,
+        'notes': chart.NOTES,
+        'offset': chart.OFFSET,
+        'bpms': chart.BPMS,
+    })
+
+    charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
+
+    info = {
+        'title': stepfile.info['TITLE'],
+        'artist': stepfile.info['ARTIST'],
+        'music': stepfile.info['MUSIC'],
+        'offset': stepfile.info['OFFSET'],
+        'charts': [convert_chart(chart) for chart in charts]
+    }
+
+    with open(destination, 'w') as f:
+        json.dump(info, f, indent=2)
 
 def cli_parser():
     parser = argparse.ArgumentParser()
@@ -111,6 +139,10 @@ def cli_parser():
     extract = subparsers.add_parser('extract_single', help='Extract audio information from file')
     extract.add_argument('input_file')
     extract.add_argument('output_file')
+
+    parse_single = subparsers.add_parser('parse_single', help='Parse SSC file into a json file with absoute time info')
+    parse_single.add_argument('input_file')
+    parse_single.add_argument('output_file')
 
     return parser
 
