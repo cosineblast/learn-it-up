@@ -64,7 +64,7 @@ def parse_single(source, destination):
 
     charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
 
-    content_to_write = ssc_utils.stepfile_to_dicts(
+    content_to_write = ssc_util.stepfile_to_dicts(
         stepfile._replace(charts=charts), source
     )
 

@@ -52,10 +52,18 @@ CHART_KEYS = {
     "FAKES",
 }
 
-Chart = namedtuple("Chart", CHART_KEYS)
+class Chart(NamedTuple): 
+    NOTES: list[list[str]]
+    OFFSET: float
+    BPMS: list[tuple[float, float]]
+    DESCRIPTION: str
+    TIMESIGNATURES: list[tuple[float, float, float]]
+    STOPS: list[tuple[float, ...]]
+    DELAYS: list[tuple[float, ...]]
+    WARPS: list[tuple[float, ...]]
+    FAKES: list[tuple[float, ...]]
 
 StepFile = namedtuple("StepFile", ["info", "charts"])
-
 
 class StepInfo(NamedTuple):
     measure_index: int
@@ -238,27 +246,30 @@ def load_ssc(filename: str) -> StepFile:
 
     fill_default_chart_values(charts, stepfile_info, filename)
 
-    for chart in charts:
-        parse_chart_strings(chart)
+    charts = [parse_chart_strings(chart) for chart in charts]
 
-    return StepFile(info=stepfile_info, charts=[Chart(**chart) for chart in charts])
+    return StepFile(info=stepfile_info, charts=charts)
 
 
 def parse_chart_strings(chart: dict):
+    return Chart(
+        OFFSET = float(chart["OFFSET"]),
+        BPMS = parse_equals_pair_list(chart["BPMS"]),
+        STOPS = parse_equals_pair_list(chart["STOPS"]),
+        DELAYS = parse_equals_pair_list(chart["DELAYS"]),
+        TIMESIGNATURES = parse_equals_pair_list(chart["TIMESIGNATURES"]),
+        FAKES = parse_equals_pair_list(chart["FAKES"]),
+        WARPS = parse_equals_pair_list(chart["WARPS"]),
+        NOTES = parse_notes(chart["NOTES"]),
 
-    chart["OFFSET"] = float(chart["OFFSET"])
-    chart["BPMS"] = parse_equals_pair_list(chart["BPMS"])
-    chart["STOPS"] = parse_equals_pair_list(chart["STOPS"])
-    chart["DELAYS"] = parse_equals_pair_list(chart["DELAYS"])
-    chart["TIMESIGNATURES"] = parse_equals_pair_list(chart["TIMESIGNATURES"])
-    chart["FAKES"] = parse_equals_pair_list(chart["FAKES"])
-
-    chart["NOTES"] = parse_notes(chart["NOTES"])
-
-    # Songs that have titles attached have INFOBAR TITLE in their descriptions,
-    # but they're still valid, so we just remove the INFOBAR TITLE thing
-    if chart["DESCRIPTION"].endswith("INFOBAR TITLE"):
-        chart["DESCRIPTION"] = chart["DESCRIPTION"][0 : -len("INFOBAR TITLE")].strip()
+        # Songs that have titles attached have INFOBAR TITLE in their descriptions,
+        # but they're still valid, so we just remove the INFOBAR TITLE thing
+        DESCRIPTION = (
+            chart["DESCRIPTION"][0 : -len("INFOBAR TITLE")].strip() if
+            chart["DESCRIPTION"].endswith("INFOBAR TITLE") else
+            chart["DESCRIPTION"]
+        )
+    )
 
 
 def parse_notes(notes):
