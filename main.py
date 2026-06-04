@@ -1,7 +1,6 @@
-
 # A ssc file is a sequence of a bunch of key value pairs
 # of the form #KEY:VALUE;
-# 
+#
 # The first key of a file is VERSION (we expect 0.81)
 # then, the file will contain several attributes about all the charts contained in the file
 # such as song name, song author, genre, expected bpm, audio file, background video file.
@@ -43,61 +42,78 @@ import itertools
 from pathlib import Path
 import pickle
 
+
 def main():
     args = cli_parser().parse_args()
 
     match args.command:
-        case 'inspect':
+        case "inspect":
             misc_commands.inspect_chart(args.filename)
 
-        case 'simulate':
+        case "simulate":
             misc_commands.simulate_chart(args.filename, args.chart)
 
-        case 'extract_single':
+        case "extract_single":
             misc_commands.extract_single(args.input_file, args.output_file)
 
-        case 'parse_single':
+        case "parse_single":
             misc_commands.parse_single(args.input_file, args.output_file)
 
-        case 'parse_all':
+        case "parse_all":
             parse_all()
 
-        case 'extract_all':
+        case "extract_all":
             extract_all()
 
-        case 'partition':
-            compute_partitions(args.seed)
+        case "partition":
+            partition(args.seed)
         case command:
             print("Invalid command '{}'".format(command))
+
 
 def cli_parser():
     parser = argparse.ArgumentParser()
 
-    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    inspect = subparsers.add_parser('inspect', help='Inspect relevant attributes of a PIU SSC file')
-    inspect.add_argument('filename')
+    inspect = subparsers.add_parser(
+        "inspect", help="Inspect relevant attributes of a PIU SSC file"
+    )
+    inspect.add_argument("filename")
 
-    simulate = subparsers.add_parser('simulate', help='Simulate timing of a PIU SSC chart')
-    simulate.add_argument('filename')
-    simulate.add_argument('--chart', default=None)
+    simulate = subparsers.add_parser(
+        "simulate", help="Simulate timing of a PIU SSC chart"
+    )
+    simulate.add_argument("filename")
+    simulate.add_argument("--chart", default=None)
 
-    extract = subparsers.add_parser('extract_single', help='Extract audio information from file')
-    extract.add_argument('input_file')
-    extract.add_argument('output_file')
+    extract = subparsers.add_parser(
+        "extract_single", help="Extract audio information from file"
+    )
+    extract.add_argument("input_file")
+    extract.add_argument("output_file")
 
-    parse_single = subparsers.add_parser('parse_single', help='Parse SSC file into a json file with absoute time info')
-    parse_single.add_argument('input_file')
-    parse_single.add_argument('output_file')
+    parse_single = subparsers.add_parser(
+        "parse_single", help="Parse SSC file into a json file with absoute time info"
+    )
+    parse_single.add_argument("input_file")
+    parse_single.add_argument("output_file")
 
-    parse_all = subparsers.add_parser('parse_all', help='Parse all charts in the data/songs into data/ssc_json')
+    parse_all = subparsers.add_parser(
+        "parse_all", help="Parse all charts in the data/songs into data/ssc_json"
+    )
 
-    extract_all = subparsers.add_parser('extract_all', help='Extract audio information from all files in data/ssc_json' )
+    extract_all = subparsers.add_parser(
+        "extract_all", help="Extract audio information from all files in data/ssc_json"
+    )
 
-    partition = subparsers.add_parser('partition', help='Compute training test and validation partitions' )
-    partition.add_argument('--seed', default=42, type=int) 
+    partition = subparsers.add_parser(
+        "partition", help="Compute training test and validation partitions"
+    )
+    partition.add_argument("--seed", default=42, type=int)
 
     return parser
+
 
 # This command parses all the SSC files for the model's dataset.
 # it:
@@ -107,77 +123,79 @@ def cli_parser():
 # - generates the three mirrored versions of the charts (horizontal, vertical, horizontal+vertical)
 # - saves the result to data/json_ssc/${pack_name}_${song_title}.ssc.json
 def parse_all():
-    print('LET THE BASS KICK')
+    print("LET THE BASS KICK")
 
-    sscs = sorted(glob.glob('data/songs/**/*.ssc', recursive=True))
+    sscs = sorted(glob.glob("data/songs/**/*.ssc", recursive=True))
 
-    print('About to parse {} .ssc files'.format(len(sscs)))
+    print("About to parse {} .ssc files".format(len(sscs)))
 
-    os.makedirs('data/parsed', exist_ok=True)
+    os.makedirs("data/parsed", exist_ok=True)
 
     for file in sscs:
-        print('<<< Parsing SSC file', file)
+        print("<<< Parsing SSC file", file)
 
         stepfile = ssc_util.load_ssc(file)
 
-        charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
-        
-        charts += [new_chart for chart in charts for new_chart in generate_permutations(chart)]
+        charts = [
+            chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)
+        ]
+
+        charts += [
+            new_chart for chart in charts for new_chart in _generate_permutations(chart)
+        ]
 
         destination_path = _get_destination_path_for_ssc(file)
 
-        print('>>> Saving parsed result to', destination_path)
+        print(">>> Saving parsed result to", destination_path)
         print()
 
         content = ssc_util.stepfile_to_dicts(stepfile._replace(charts=charts), file)
 
-        with open(destination_path, 'w') as f:
+        with open(destination_path, "w") as f:
             json.dump(content, f)
+
 
 # This command extracts features for all song files
 def extract_all():
-    print('JOOOOOOOOOOO')
+    print("JOOOOOOOOOOO")
 
-    ssc_jsons = sorted(glob.glob('data/parsed/*.json'))
+    ssc_jsons = sorted(glob.glob("data/parsed/*.json"))
 
-    print('About to load {} audio files'.format(len(ssc_jsons)))
+    print("About to load {} audio files".format(len(ssc_jsons)))
 
-    os.makedirs('data/features', exist_ok=True)
+    os.makedirs("data/features", exist_ok=True)
 
     for file in ssc_jsons:
-        print('<<< Reading JSON stepfile', file)
+        print("<<< Reading JSON stepfile", file)
 
-        with open(file, 'r') as f:
+        with open(file, "r") as f:
             metadata = json.load(f)
 
-        source = metadata['music']
+        source = metadata["music"]
         destination = _get_destination_path_for_features(file)
 
-        print('>>> Extracting features for {} into {}...'.format(source, destination))
+        print(">>> Extracting features for {} into {}...".format(source, destination))
 
         loader = audio_util.AudioFeatureLoader(use_tqdm=False)
 
         features = loader.load(source)
 
-        with open(destination, 'wb') as f:
+        with open(destination, "wb") as f:
             pickle.dump(features, f)
 
-        print('>>> OK!')
+        print(">>> OK!")
 
-
-    
     pass
-    
 
-# This command creates a  file
-# data/partitions.json containing information about which files are in which
+
+# This command creates a file data/partitions.json containing information about which files are in which
 # dataset partitions: training, validation and test
-def compute_partitions(seed):
+def partition(seed):
 
     random.seed(seed)
 
     ratios = [8, 1, 1]
-    partitions = ['training', 'validation', 'testing']
+    partitions = ["training", "validation", "testing"]
 
     prefix_sum_ratios = list(itertools.accumulate(ratios))
 
@@ -189,18 +207,17 @@ def compute_partitions(seed):
             if remainder < ratio:
                 return partition
 
-    files_per_partition = {partition:[] for partition in partitions}
+    files_per_partition = {partition: [] for partition in partitions}
 
-    all_jsons = glob.glob('data/parsed/*.json')
+    all_jsons = glob.glob("data/parsed/*.json")
 
     random.shuffle(all_jsons)
 
     for i, file in enumerate(all_jsons):
         files_per_partition[get_partition_for_index(i)].append(file)
 
-    with open('data/partitions.json', 'w') as f:
+    with open("data/partitions.json", "w") as f:
         json.dump(files_per_partition, f, indent=2)
-
 
 
 def _get_destination_path_for_ssc(filepath):
@@ -208,32 +225,34 @@ def _get_destination_path_for_ssc(filepath):
         without_prefix = None
 
         # Remove '123 - ' prefix
-        match re.findall('^([0-9]+ - )(.+)$', name):
-            case [(_, suffix)]: without_prefix = suffix
-            case _: without_prefix = name
+        match re.findall("^([0-9]+ - )(.+)$", name):
+            case [(_, suffix)]:
+                without_prefix = suffix
+            case _:
+                without_prefix = name
 
-        return str(without_prefix).replace(' ', '_')
-        
+        return str(without_prefix).replace(" ", "_")
 
     path = Path(filepath)
     pack_name = sanitize_name(path.parents[1].name)
     filename = sanitize_name(path.name)
 
-    result = Path('data/parsed/') / Path(pack_name + '___' + filename + '.json')
+    result = Path("data/parsed/") / Path(pack_name + "___" + filename + ".json")
 
     return result
 
+
 def _get_destination_path_for_features(json_filepath):
-    assert str(json_filepath).endswith('.ssc.json')
-    return Path('data/features') / (Path(Path(json_filepath).stem).stem + '.pkl')
+    assert str(json_filepath).endswith(".ssc.json")
+    return Path("data/features") / (Path(Path(json_filepath).stem).stem + ".pkl")
 
 
-def generate_permutations(chart):
+def _generate_permutations(chart):
     # down left, up left, middle, up right, down right
     dl, ul, m, ur, dr = 0, 1, 2, 3, 4
 
-    vertical    = { dl: ul, ul: dl, m: m, ur: dr, dr: ur }
-    horizontal  = { dl: dr, ul: ur, m: m, ur: ul, dr: dl }
+    vertical = {dl: ul, ul: dl, m: m, ur: dr, dr: ur}
+    horizontal = {dl: dr, ul: ur, m: m, ur: ul, dr: dl}
 
     permute = lambda step, permutation: [step[permutation[i]] for i in range(5)]
 
@@ -242,16 +261,14 @@ def generate_permutations(chart):
     )
 
     return [
-        chart._replace(DESCRIPTION=chart.DESCRIPTION+ name, NOTES=apply(permutation))
+        chart._replace(DESCRIPTION=chart.DESCRIPTION + name, NOTES=apply(permutation))
         for permutation, name in [
-            (vertical, '_V'),
+            (vertical, "_V"),
             # TODO: apply horizontal flip on low level charts
             # (horizontal, '_H'),
         ]
     ]
 
-    
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
