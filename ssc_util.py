@@ -35,6 +35,8 @@ import msdparser
 import itertools
 import time
 import typing
+import pickle
+
 from pathlib import Path
 from collections import namedtuple
 from typing import NamedTuple
@@ -64,7 +66,9 @@ class Chart(NamedTuple):
     WARPS: list[tuple[float, ...]]
     FAKES: list[tuple[float, ...]]
 
-StepFile = namedtuple("StepFile", ["info", "charts"])
+class StepFile(NamedTuple):
+    info: dict[str, str]
+    charts: list[Chart]
 
 class StepInfo(NamedTuple):
     measure_index: int
@@ -80,6 +84,11 @@ class RefinedChart(NamedTuple):
     offset: float
     bpms: list[tuple[float, float]]
     description: str
+
+# absolute time information in charts and absolute music file path
+class RefinedStepFile(NamedTuple):
+    info: dict[str, str]
+    charts: list[RefinedChart]
 
 def run_chart(chart: RefinedChart):
     steps = [step for step in chart.steps if step.stepcode != "00000"]
@@ -154,6 +163,18 @@ def refine_chart(chart: Chart) -> RefinedChart:
         offset=chart.OFFSET,
         bpms= chart.BPMS,
         description= chart.DESCRIPTION
+    )
+
+def refine_stepfile(stepfile: StepFile, original_path) -> RefinedStepFile:
+    """
+    Refine charts and add absolute music path
+    """
+
+    absolute_music_path = (Path(original_path).parent / Path(stepfile.info["MUSIC"]).name).resolve()
+
+    return RefinedStepFile(
+       info={**stepfile.info, 'MUSIC':str(absolute_music_path)},
+       charts=[refine_chart(chart) for chart in stepfile.charts]
     )
 
 def compute_beat_absolute_time(offset, bpms, segment_durations, beat):
@@ -338,47 +359,9 @@ def split_chart_blocks(content):
         if not is_notedata_row
     ]
 
-    
-def refined_stepfile_to_dicts(info: dict[str,str], charts: list[RefinedChart], stepfile_path: str):
-    # Converts a refined stepfile to dicts for json serialization
+def dump_refined_stepfile(stepfile: RefinedStepFile, file):
+    pickle.dump(stepfile, file)
 
-    def steps_to_dict(steps: list[StepInfo]):
-        # We use struct of arrays in notes to save up space
+def load_refined_stepfile(file) -> RefinedStepFile:
+    return pickle.load(file)
 
-        result = {
-            "measure_index": [],
-            "measure_length": [],
-            "offset_in_measure": [],
-            "time_in_beats": [],
-            "time_in_seconds": [],
-            "stepcode": [],
-        }
-
-        for step in steps:
-            result["measure_index"].append(step.measure_index),
-            result["measure_length"].append(step.measure_length),
-            result["offset_in_measure"].append(step.offset_in_measure),
-            result["time_in_beats"].append(step.time_in_beats),
-            result["time_in_seconds"].append(step.time_in_seconds),
-            result["stepcode"].append(step.stepcode),
-
-        return result
-        
-
-    def chart_to_dict(chart: RefinedChart):
-        return {
-            "description": chart.description,
-            "steps": steps_to_dict(chart.steps),
-            "offset": chart.offset,
-            "bpms": chart.bpms,
-        }
-
-    return {
-        "title": info["TITLE"],
-        "artist": info["ARTIST"],
-        "music": str(
-            (Path(stepfile_path).parent / Path(info["MUSIC"]).name).resolve()
-        ),
-        "offset": info["OFFSET"],
-        "charts": [chart_to_dict(chart) for chart in charts],
-    }

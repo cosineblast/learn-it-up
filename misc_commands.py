@@ -62,13 +62,7 @@ def parse_single(source, destination):
 
     charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
 
-    refined_charts = [ssc_util.refine_chart(chart) for chart in charts]
+    refined = ssc_util.refine_stepfile(stepfile._replace(charts=charts), source)
 
-    content_to_write = ssc_util.refined_stepfile_to_dicts(
-        stepfile.info,
-        refined_charts,
-        source
-    )
-
-    with open(destination, "w") as f:
-        json.dump(content_to_write, f, indent=2)
+    with open(destination, "wb") as f:
+        ssc_util.dump_refined_stepfile(refined, f)

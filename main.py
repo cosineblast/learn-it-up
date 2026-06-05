@@ -94,17 +94,17 @@ def cli_parser():
     extract.add_argument("output_file")
 
     parse_single = subparsers.add_parser(
-        "parse_single", help="Parse SSC file into a json file with absoute time info"
+        "parse_single", help="Parse SSC file into a refined file with absoute time info"
     )
     parse_single.add_argument("input_file")
     parse_single.add_argument("output_file")
 
     parse_all = subparsers.add_parser(
-        "parse_all", help="Parse all charts in the data/songs into data/ssc_json"
+        "parse_all", help="Parse all charts in the data/songs into data/parsed"
     )
 
     extract_all = subparsers.add_parser(
-        "extract_all", help="Extract audio information from all files in data/ssc_json"
+        "extract_all", help="Extract audio information from all files in data/parsed"
     )
 
     partition = subparsers.add_parser(
@@ -121,7 +121,7 @@ def cli_parser():
 # - filters out charts that are considered invalid (e.g containing stops or warps)
 # - finds absolute BPM information for all these charts
 # - generates the three mirrored versions of the charts (horizontal, vertical, horizontal+vertical)
-# - saves the result to data/json_ssc/${pack_name}_${song_title}.ssc.json
+# - saves the result to data/parsed/${pack_name}_${song_title}.ssc.bin
 def parse_all():
     print("LET THE BASS KICK")
 
@@ -146,32 +146,33 @@ def parse_all():
 
         destination_path = _get_destination_path_for_ssc(file)
 
+        refined_stepfile = ssc_util.refine_stepfile(stepfile._replace(charts=charts), file)
+
         print(">>> Saving parsed result to", destination_path)
         print()
 
-        content = ssc_util.stepfile_to_dicts(stepfile._replace(charts=charts), file)
 
-        with open(destination_path, "w") as f:
-            json.dump(content, f)
+        with open(destination_path, "wb") as f:
+            ssc_util.dump_refined_stepfile(refined_stepfile, f)
 
 
 # This command extracts features for all song files
 def extract_all():
     print("JOOOOOOOOOOO")
 
-    ssc_jsons = sorted(glob.glob("data/parsed/*.json"))
+    refined_sscs = sorted(glob.glob("data/parsed/*.ssc.bin"))
 
-    print("About to load {} audio files".format(len(ssc_jsons)))
+    print("About to load {} audio files".format(len(refined_sscs)))
 
     os.makedirs("data/features", exist_ok=True)
 
-    for file in ssc_jsons:
-        print("<<< Reading JSON stepfile", file)
+    for file in refined_sscs:
+        print("<<< Reading refined stepfile", file)
 
-        with open(file, "r") as f:
-            metadata = json.load(f)
+        with open(file, "rb") as f:
+            refined_stepfile = ssc_util.load_refined_stepfile(f)
 
-        source = metadata["music"]
+        source = refined_stepfile.info["MUSIC"]
         destination = _get_destination_path_for_features(file)
 
         print(">>> Extracting features for {} into {}...".format(source, destination))
@@ -184,9 +185,6 @@ def extract_all():
             pickle.dump(features, f)
 
         print(">>> OK!")
-
-    pass
-
 
 # This command creates a file data/partitions.json containing information about which files are in which
 # dataset partitions: training, validation and test
@@ -209,11 +207,11 @@ def partition(seed):
 
     files_per_partition = {partition: [] for partition in partitions}
 
-    all_jsons = glob.glob("data/parsed/*.json")
+    all_refined_files = glob.glob("data/parsed/*.bin")
 
-    random.shuffle(all_jsons)
+    random.shuffle(all_refined_files)
 
-    for i, file in enumerate(all_jsons):
+    for i, file in enumerate(all_refined_files):
         files_per_partition[get_partition_for_index(i)].append(file)
 
     with open("data/partitions.json", "w") as f:
@@ -237,14 +235,14 @@ def _get_destination_path_for_ssc(filepath):
     pack_name = sanitize_name(path.parents[1].name)
     filename = sanitize_name(path.name)
 
-    result = Path("data/parsed/") / Path(pack_name + "___" + filename + ".json")
+    result = Path("data/parsed/") / Path(pack_name + "___" + filename + ".bin")
 
     return result
 
 
-def _get_destination_path_for_features(json_filepath):
-    assert str(json_filepath).endswith(".ssc.json")
-    return Path("data/features") / (Path(Path(json_filepath).stem).stem + ".pkl")
+def _get_destination_path_for_features(refined_filepath):
+    assert str(refined_filepath).endswith(".ssc.bin")
+    return Path("data/features") / (Path(Path(refined_filepath).stem).stem + ".feat.bin")
 
 
 def _generate_permutations(chart):
