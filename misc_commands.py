@@ -38,10 +38,8 @@ def simulate_chart(filename: str, chart_name):
 
     for chart in charts:
         if chart.DESCRIPTION == chart_name:
-            info = ssc_util.compute_steps_absolute_times(
-                chart.OFFSET, chart.BPMS, chart.NOTES
-            )
-            ssc_util.run_chart(info)
+            refined = ssc_util.refine_chart(chart)
+            ssc_util.run_chart(refined)
 
 
 def extract_single(source, destination):
@@ -64,8 +62,12 @@ def parse_single(source, destination):
 
     charts = [chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)]
 
-    content_to_write = ssc_util.stepfile_to_dicts(
-        stepfile._replace(charts=charts), source
+    refined_charts = [ssc_util.refine_chart(chart) for chart in charts]
+
+    content_to_write = ssc_util.refined_stepfile_to_dicts(
+        stepfile.info,
+        refined_charts,
+        source
     )
 
     with open(destination, "w") as f:
