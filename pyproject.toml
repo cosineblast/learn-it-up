@@ -1,0 +1,11 @@
+[project]
+name = "learn-it-up"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "essentia>=2.1b6.dev1389",
+    "msdparser>=2.0.0",
+    "tqdm>=4.68.1",
+]

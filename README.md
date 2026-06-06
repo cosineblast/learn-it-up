@@ -6,7 +6,11 @@ to adapt the LSTM and Transformer architectures for Pump it Up chart generation.
 
 ## Running
 
+The dependencies for this project are listed in `pyproject.toml`.
+
 Use `python3 main.py --help` to get a list of available operations.
+
+This project is compatible with `uv`.
 
 ## File structure
 

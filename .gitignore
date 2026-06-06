@@ -7,3 +7,4 @@ data/parsed
 data/partitions.json
 data/features
 samples
+.venv
