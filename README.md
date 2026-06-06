@@ -4,14 +4,6 @@
 This project contains the (work in progress) code, and reference material for [Learn it Up](https://cosineblast.github.io/learn-it-up), a project that tries
 to adapt the LSTM and Transformer architectures for Pump it Up chart generation.
 
-## Running
-
-The dependencies for this project are listed in `pyproject.toml`.
-
-Use `python3 main.py --help` to get a list of available operations.
-
-This project is compatible with `uv`.
-
 ## File structure
 
 This project assumes that the songs packs are in `./data/songs`, in usual `packdir/songdir` fashion. Step files must be in SSC.
@@ -24,3 +16,16 @@ The processing pipeline consists of:
 - Extract absolute time information for all charts
 - Save processed ssc files to disk, at path `./data/parsed/${PACK_NAME}___${SONG_TITLE}.ready.ssc.bin` (I wanted to use JSON but serializing and deserializing python classes to json sucks in general and i didnt want to add another dependency)
 
+## Running
+
+The dependencies for this project are listed in `pyproject.toml`.
+This project is compatible with `uv`.
+
+Use `python3 main.py --help` to get a list of available operations.
+
+- `python3 main.py parse_all` to parse all SSC files.
+- `python3 main.py extract_all` to extract features from all audio files.
+
+## Notebooks
+
+The dataset analysis marimo notebook is in `analysis.py`, that can be run with `marimo edit analysis.py` or `uv marimo edit analysis.py`
