@@ -54,6 +54,29 @@ def extract_single(source, destination):
     with open(destination, "wb") as f:
         pickle.dump(features, f)
 
+def resample_single(features_file, refined_file, chartname, destination):
+    print("Resampling features {} of for chart {} of stepfile into {}".format(features_file, chartname, refined_file, destination))
+
+    with open(refined_file, 'rb') as f:
+        stepfile = ssc_util.load_refined_stepfile(f)
+
+    with open(features_file, 'rb') as f:
+        features = pickle.load(f)
+
+    match next(iter(chart for chart in stepfile.charts if chart.description == chartname), None):
+        case None:
+            raise Exception(f'Chart {chartname} not found in stepfile {refined_file}')
+        case value:
+            chart = value
+
+    resampled = audio_util.resample_features(features, chart.beat_start_end_times)
+
+    print(resampled.shape)
+
+    with open(destination, 'wb') as f:
+        pickle.dump(resampled, f)
+
+
 
 def parse_single(source, destination):
     print("Parsing SSC file {} into {}".format(source, destination))

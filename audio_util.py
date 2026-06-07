@@ -82,3 +82,33 @@ class AudioFeatureLoader:
 
 def _run_pipeline(pipeline, value):
     return functools.reduce(lambda x, f: f(x), pipeline, value)
+
+def resample_features(frames, beat_start_end_times, frames_per_beat=32, radius=0, frames_per_second=100):
+    result = []
+
+    for start, end in beat_start_end_times:
+        result.append(_resample_features_at_beat(frames, start, end, radius, frames_per_beat, frames_per_second))
+
+    return np.array(result)
+
+
+def _resample_features_at_beat(frames, start, end, radius, frames_per_beat, frames_per_second):
+    # Algorithm inspired by DDCL
+
+    frame_count = frames.shape[0]
+    assert frame_count > 0
+
+    start, end = int(start*frames_per_second), int(end*frames_per_second)
+
+    indices = np.linspace(start - radius, end + radius, num = frames_per_beat, endpoint = False).astype(int)
+
+    clipped_indices = np.clip(indices, 0, frame_count - 1)
+
+    bad_indices = (indices < 0) | (indices >= frame_count)
+
+    result = frames[clipped_indices]
+
+    result[bad_indices] = np.log(1e-16)
+    # TODO: use min of frames as default_value instead of log-zer
+
+    return result

@@ -59,6 +59,9 @@ def main():
         case "parse_single":
             misc_commands.parse_single(args.input_file, args.output_file)
 
+        case "resample_single":
+            misc_commands.resample_single(args.features, args.sscbin, args.chart, args.destination)
+
         case "parse_all":
             parse_all()
 
@@ -98,6 +101,14 @@ def cli_parser():
     )
     parse_single.add_argument("input_file")
     parse_single.add_argument("output_file")
+
+    resample_single = subparsers.add_parser(
+        "resample_single", help="Resample an attribute file to fit BPMs of a chart (debug)"
+    )
+    resample_single.add_argument("features")
+    resample_single.add_argument("--sscbin")
+    resample_single.add_argument("--chart")
+    resample_single.add_argument("destination")
 
     parse_all = subparsers.add_parser(
         "parse_all", help="Parse all charts in the data/songs into data/parsed"
