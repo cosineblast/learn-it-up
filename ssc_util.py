@@ -47,6 +47,7 @@ CHART_KEYS = {
     "NOTES",
     "OFFSET",
     "BPMS",
+    "CREDIT",
     "DESCRIPTION",
     "STOPS",
     "DELAYS",
@@ -61,6 +62,7 @@ class Chart(NamedTuple):
     OFFSET: float
     BPMS: list[tuple[float, float]]
     DESCRIPTION: str
+    CREDIT: str
     TIMESIGNATURES: list[tuple[float, float, float]]
     STOPS: list[tuple[float, ...]]
     DELAYS: list[tuple[float, ...]]
@@ -87,6 +89,7 @@ class RefinedChart(NamedTuple):
     offset: float
     bpms: list[tuple[float, float]]
     description: str
+    credit: str
     measure_start_end_times: list[tuple[float, float]]
 
 # absolute time information in charts and absolute music file path
@@ -135,6 +138,7 @@ def _fill_default_chart_values(charts, stepfile_info, filename):
         "OFFSET": stepfile_info["OFFSET"],
         "BPMS": stepfile_info["BPMS"],
         "DESCRIPTION": "NONE",
+        "CREDIT": "UNKNOWN",
         "STOPS": "",
         "DELAYS": "",
         "WARPS": "",
@@ -173,7 +177,9 @@ def _parse_chart_strings(chart: dict) -> Chart:
             chart["DESCRIPTION"][0 : -len("INFOBAR TITLE")].strip() if
             chart["DESCRIPTION"].endswith("INFOBAR TITLE") else
             chart["DESCRIPTION"]
-        )
+        ),
+
+        CREDIT = chart["CREDIT"]
     )
 
 def _parse_notes(notes):
@@ -258,6 +264,7 @@ def refine_chart(chart: Chart) -> RefinedChart:
         offset=chart.OFFSET,
         bpms= chart.BPMS,
         description= chart.DESCRIPTION,
+        credit = chart.CREDIT,
         measure_start_end_times=_compute_measure_times(chart.OFFSET, chart.BPMS, chart.NOTES)
     )
 

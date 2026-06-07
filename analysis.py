@@ -153,6 +153,11 @@ def _(difficulties, np):
     return counts, diff_range
 
 
+@app.cell
+def _():
+    return
+
+
 @app.cell(hide_code=True)
 def _(counts, diff_range, difficulties, np, plt):
     max_diff = max(difficulties) 
@@ -180,9 +185,37 @@ def _(counts, diff_range, difficulties, np, plt):
 def _(mo):
     mo.md("""
     ### Chart authorship analysis
-
-    **TODO**: Include CREDIT attribute in refined charts.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(np, stepfiles):
+    authors_per_stepfile = [[chart.credit for chart in stepfile.charts] for stepfile in stepfiles]
+    all_authors = [author for file_authors in authors_per_stepfile for author in file_authors]
+
+    author_values, author_counts = np.unique(all_authors, return_counts=True)
+    return author_counts, author_values
+
+
+@app.cell(hide_code=True)
+def _(author_counts, author_values, md_list, mo):
+    _values_counts = reversed(sorted(list(zip(author_values, author_counts)), key=lambda x: x[1]))
+
+    mo.md(f'''
+    ### Number of charts per author:
+
+    {md_list([f'{author}: {count}' for author, count in _values_counts])}
+    ''')
+    return
+
+
+@app.cell(hide_code=True)
+def _(author_counts, author_values, plt):
+
+    plt.pie(author_counts, labels=author_values, autopct='%1.1f%%')
+    plt.title('Percentages of chart authorships over all charts')
+    plt.gca()
     return
 
 
@@ -191,19 +224,6 @@ def _(mo):
     mo.md("""
     # Appendix
     """)
-    return
-
-
-@app.cell
-def _(stepfiles):
-    festival_of_death_moon = [file for file in stepfiles if file.info['TITLE'] == 'Festival of Death Moon'][0]
-    chart = festival_of_death_moon.charts[2]
-    return (chart,)
-
-
-@app.cell
-def _(chart):
-    chart.measure_start_end_times
     return
 
 
