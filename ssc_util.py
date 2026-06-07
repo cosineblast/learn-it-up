@@ -37,8 +37,10 @@ import time
 import typing
 import pickle
 
+from fractions import Fraction
+from math import floor
 from pathlib import Path
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from typing import NamedTuple
 
 STEPFILE_KEYS = {"TITLE", "ARTIST", "MUSIC", "OFFSET", "BPMS", "TIMESIGNATURES"}
@@ -76,10 +78,7 @@ class StepFile(NamedTuple):
 
 # All time-related information about a step in a chart
 class StepInfo(NamedTuple):
-    measure_index: int
-    measure_length: int
-    offset_in_measure: int
-    time_in_beats: float
+    time_in_beats: Fraction
     time_in_seconds: float
     stepcode: str
 
@@ -92,6 +91,7 @@ class RefinedChart(NamedTuple):
     credit: str
     beat_start_end_times: list[tuple[float, float]]
     beat_bpms: list[float]
+    beat_onset_vectors: list[list[float]]
 
 # absolute time information in charts and absolute music file path
 class RefinedStepFile(NamedTuple):
@@ -260,14 +260,19 @@ def refine_stepfile(stepfile: StepFile, original_path) -> RefinedStepFile:
 def refine_chart(chart: Chart) -> RefinedChart:
     """Refines a chart to add absolute step time information to it."""
 
+    beat_count = len(chart.NOTES) * 4
+
+    refined_steps = _compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES)
+    
     return RefinedChart(
-        steps=_compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES),
+        steps=refined_steps,
         offset=chart.OFFSET,
         bpms= chart.BPMS,
         description= chart.DESCRIPTION,
         credit = chart.CREDIT,
-        beat_start_end_times=_compute_beat_times(chart.OFFSET, chart.BPMS, chart.NOTES),
-        beat_bpms=_compute_beat_bpms(chart.OFFSET, chart.BPMS, chart.NOTES)
+        beat_start_end_times=_compute_beat_times(chart.OFFSET, chart.BPMS, beat_count),
+        beat_bpms=_compute_beat_bpms(chart.BPMS, beat_count),
+        beat_onset_vectors=_compute_beat_onset_vectors(refined_steps, beat_count)
     )
 
 def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
@@ -287,19 +292,17 @@ def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
         measure_len = len(measure)
 
         for i, code in enumerate(measure):
-            beat = measure_num * 4.0 + 4.0 * (float(i) / measure_len)
-            beat_abs = _compute_beat_absolute_time(offset, bpms, segment_durations, beat)
+            if code != '00000':
+                beat = measure_num * 4 + 4 * (Fraction(i) / measure_len)
+                beat_abs = _compute_beat_absolute_time(offset, bpms, segment_durations, float(beat))
 
-            info = StepInfo(
-                measure_index=measure_num,
-                measure_length=measure_len,
-                offset_in_measure=i,
-                time_in_beats=beat,
-                time_in_seconds=beat_abs,
-                stepcode=code,
-            )
+                info = StepInfo(
+                    time_in_beats=beat,
+                    time_in_seconds=beat_abs,
+                    stepcode=code,
+                )
 
-            result.append(info)
+                result.append(info)
 
     return result
 
@@ -348,17 +351,17 @@ def _compute_beat_absolute_time(offset, bpms, segment_durations, beat):
     return time_before_this_segment + time_since_start_of_this_segment - offset
 
 
-def _compute_beat_times(offset, bpms, notes) -> list[tuple[float, float]]:
+def _compute_beat_times(offset, bpms, beat_count) -> list[tuple[float, float]]:
     """Returns a list of tuples (start, end) with the start and end times of the given beat in seconds"""
     durations = _compute_segment_durations(bpms)
 
     result = [(_compute_beat_absolute_time(offset, bpms, durations, beat),
                _compute_beat_absolute_time(offset, bpms, durations, beat+1))
-         for beat in range(len(notes) * 4)]
+         for beat in range(beat_count)]
 
     return result
 
-def _compute_beat_bpms(offset, bpms, notes) -> list[tuple[float, float]]:
+def _compute_beat_bpms(bpms, beat_count) -> list[tuple[float, float]]:
     """Returns a list with the bpm at the start of each beat"""
 
     result = []
@@ -372,8 +375,50 @@ def _compute_beat_bpms(offset, bpms, notes) -> list[tuple[float, float]]:
         return bpms[-1][1]
 
     # TODO: optimize this 
-    return [get_bpm(beat) for beat in range(len(notes) * 4)]
+    return [get_bpm(beat) for beat in range(beat_count)]
 
+
+def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count):
+    """Returns a list with the onset vectors for each beat in this stepfile. An onset vector
+    of a beat is an array with 48 positions, where a 1 in index i indicates the presence
+    of a step in the i/48 time of the beat.
+    """
+
+    steps_per_beat = defaultdict(list)
+
+    for step in refined_steps:
+        assert step.time_in_beats >= 0
+        if step.stepcode != '00000':
+            beat = floor(step.time_in_beats)
+            steps_per_beat[beat].append(step)
+
+    result = []
+
+    for beat in range(beat_count):
+        steps = steps_per_beat[beat]
+
+        onset_array = [0] * 48
+
+        for step in steps:
+            step_time = step.time_in_beats - floor(step.time_in_beats)
+
+            index = 48 * step_time
+
+            # 1/48th beat = 1/192th measure
+            assert index.is_integer(), \
+                (f"""Step at beat {step.time_in_beats} has beat fraction that cannot fit in the 1/192 th note precision used by this model."""
+                """Please edit this stepfile so that all notes can fit in a precision of integer multiples of 192th notes.""")
+
+            assert onset_array[index.numerator] == 0, "Two distinct steps at the same fraction of a beat? Impossible."
+            onset_array[index.numerator] = 1
+
+        result.append(onset_array)
+
+    return result
+
+    
+
+    
 
 def run_chart(chart: RefinedChart):
     """Simulates in real time, the notes of a refined chart."""
@@ -386,7 +431,7 @@ def run_chart(chart: RefinedChart):
         code = "".join(["-" if x == "0" else x for x in step.stepcode])
         print(
             "[{:10.4f}]({:10.4f}) {}".format(
-                step.time_in_beats, step.time_in_seconds, code
+                float(step.time_in_beats), step.time_in_seconds, code
             )
         )
 
