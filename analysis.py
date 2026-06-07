@@ -228,6 +228,63 @@ def _(mo):
 
 
 @app.cell
+def _(stepfiles):
+    file = [file for file in stepfiles if file.info['TITLE'] == 'Murdoch vs Otada'][0]
+
+
+    chart = [chart for chart in file.charts if chart.description == 'S16'][0]
+
+    chart.steps[0:8]
+    chart.beat_onset_vectors[1]
+    chart.bpms
+    return
+
+
+@app.cell
+def _(np):
+    stuff = np.random.randn(2,2)
+    return (stuff,)
+
+
+@app.cell
+def _(pickle):
+    with open('samples/Murdoch_vs_Otada.S9.chart.feat.bin', 'rb') as _f:
+        file1 = pickle.load(_f)
+    return (file1,)
+
+
+@app.cell
+def _(pickle):
+    with open('/tmp/Murdoch_vs_Otada.S9.chart.feat.bin', 'rb') as _f:
+        file2 = pickle.load(_f)
+    return (file2,)
+
+
+@app.cell
+def _(file1, file2, np):
+    np.mean((file1 - file2) ** 2)
+    return
+
+
+@app.cell
+def _(np, stuff):
+
+    ix = np.array([True, False, True])
+
+    thing = np.array([[1,2], [3,4]])
+
+    np.where(ix[:, None, None], np.stack([stuff, stuff, thing]), -1)
+
+    return
+
+
+@app.cell
+def _(np):
+    np.linspace(np.array([0.0, 10.0, 20.0]), np.array([1.0, 11.0, 21.0]), num=10)
+    return
+
+
+@app.cell
 def _():
     md_list = lambda xs: '\n'.join(['- ' + f'`{element}`' for element in xs])
     return (md_list,)

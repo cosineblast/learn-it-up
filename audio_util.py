@@ -86,19 +86,21 @@ def _run_pipeline(pipeline, value):
 def resample_features(frames, beat_start_end_times, frames_per_beat=32, radius=0, frames_per_second=100):
     result = []
 
-    for start, end in beat_start_end_times:
-        result.append(_resample_features_at_beat(frames, start, end, radius, frames_per_beat, frames_per_second))
+    starts = np.array([start for start, _ in beat_start_end_times])
+    ends = np.array([end for _, end in beat_start_end_times])
 
-    return np.array(result)
+    # TODO: use min of frames as default_value instead of log(eps)
+    result = _resample_features_at_beat(frames, starts, ends, radius, frames_per_beat, frames_per_second, default_value=np.log(1e-16))
+
+    return np.transpose(result, (1, 0, 2, 3))
 
 
-def _resample_features_at_beat(frames, start, end, radius, frames_per_beat, frames_per_second):
-    # Algorithm inspired by DDCL
 
+def _resample_features_at_beat(frames, start, end, radius, frames_per_beat, frames_per_second, default_value):
     frame_count = frames.shape[0]
     assert frame_count > 0
 
-    start, end = int(start*frames_per_second), int(end*frames_per_second)
+    start, end = (start*frames_per_second).astype(int), (end*frames_per_second).astype(int)
 
     indices = np.linspace(start - radius, end + radius, num = frames_per_beat, endpoint = False).astype(int)
 
@@ -108,7 +110,6 @@ def _resample_features_at_beat(frames, start, end, radius, frames_per_beat, fram
 
     result = frames[clipped_indices]
 
-    result[bad_indices] = np.log(1e-16)
-    # TODO: use min of frames as default_value instead of log-zer
+    result[bad_indices] = default_value
 
     return result
