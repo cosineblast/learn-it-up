@@ -87,6 +87,7 @@ class RefinedChart(NamedTuple):
     offset: float
     bpms: list[tuple[float, float]]
     description: str
+    measure_start_end_times: list[tuple[float, float]]
 
 # absolute time information in charts and absolute music file path
 class RefinedStepFile(NamedTuple):
@@ -253,10 +254,11 @@ def refine_chart(chart: Chart) -> RefinedChart:
     """Refines a chart to add absolute step time information to it."""
 
     return RefinedChart(
-        steps=_compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES) ,
+        steps=_compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES),
         offset=chart.OFFSET,
         bpms= chart.BPMS,
-        description= chart.DESCRIPTION
+        description= chart.DESCRIPTION,
+        measure_start_end_times=_compute_measure_times(chart.OFFSET, chart.BPMS, chart.NOTES)
     )
 
 def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
@@ -331,9 +333,20 @@ def _compute_beat_absolute_time(offset, bpms, segment_durations, beat):
     this_segment_spb = _bpm_to_spb(bpm)
     time_since_start_of_this_segment = this_segment_spb * (beat - segment_start)
 
+    # why - offset you may ask?
+    # well, offsets are stored in negative numbers, an audio delay of 1 second is stored as -1,
+    # so we have to subtract the offset.
     return time_before_this_segment + time_since_start_of_this_segment - offset
 
 
+def _compute_measure_times(offset, bpms, notes) -> list[tuple[float, float]]:
+    durations = _compute_segment_durations(bpms)
+
+    result = [(_compute_beat_absolute_time(offset, bpms, durations, i * 4),
+               _compute_beat_absolute_time(offset, bpms, durations, (i+1) * 4))
+         for (i, _measure) in enumerate(notes)]
+
+    return result
 
 def run_chart(chart: RefinedChart):
     """Simulates in real time, the notes of a refined chart."""

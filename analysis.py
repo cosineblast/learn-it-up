@@ -8,6 +8,8 @@ app = marimo.App(width="medium", auto_download=["html"])
 def _(mo):
     mo.md("""
     # Pump it Up Dataset Analysis
+
+    This is the notebook where I play with the data as a REPL and do data analysis.
     """)
     return
 
@@ -129,10 +131,8 @@ def _(difficulties_per_stepfile):
     def remove_s(diff):
         assert diff.startswith('S')
         return int(diff[1:])
-    
+
     difficulties = [remove_s(diff) for diffs in difficulties_per_stepfile for diff in diffs]
-
-
     return (difficulties,)
 
 
@@ -173,14 +173,13 @@ def _(counts, diff_range, difficulties, np, plt):
     plt.title('Histogram of difficulties in dataset')
 
     plt.gca()
-    
     return
 
 
 @app.cell
 def _(mo):
     mo.md("""
-    ### Chart author analysis
+    ### Chart authorship analysis
 
     **TODO**: Include CREDIT attribute in refined charts.
     """)
@@ -192,6 +191,19 @@ def _(mo):
     mo.md("""
     # Appendix
     """)
+    return
+
+
+@app.cell
+def _(stepfiles):
+    festival_of_death_moon = [file for file in stepfiles if file.info['TITLE'] == 'Festival of Death Moon'][0]
+    chart = festival_of_death_moon.charts[2]
+    return (chart,)
+
+
+@app.cell
+def _(chart):
+    chart.measure_start_end_times
     return
 
 
