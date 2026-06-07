@@ -90,7 +90,8 @@ class RefinedChart(NamedTuple):
     bpms: list[tuple[float, float]]
     description: str
     credit: str
-    measure_start_end_times: list[tuple[float, float]]
+    beat_start_end_times: list[tuple[float, float]]
+    beat_bpms: list[float]
 
 # absolute time information in charts and absolute music file path
 class RefinedStepFile(NamedTuple):
@@ -265,7 +266,8 @@ def refine_chart(chart: Chart) -> RefinedChart:
         bpms= chart.BPMS,
         description= chart.DESCRIPTION,
         credit = chart.CREDIT,
-        measure_start_end_times=_compute_measure_times(chart.OFFSET, chart.BPMS, chart.NOTES)
+        beat_start_end_times=_compute_beat_times(chart.OFFSET, chart.BPMS, chart.NOTES),
+        beat_bpms=_compute_beat_bpms(chart.OFFSET, chart.BPMS, chart.NOTES)
     )
 
 def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
@@ -346,14 +348,32 @@ def _compute_beat_absolute_time(offset, bpms, segment_durations, beat):
     return time_before_this_segment + time_since_start_of_this_segment - offset
 
 
-def _compute_measure_times(offset, bpms, notes) -> list[tuple[float, float]]:
+def _compute_beat_times(offset, bpms, notes) -> list[tuple[float, float]]:
+    """Returns a list of tuples (start, end) with the start and end times of the given beat in seconds"""
     durations = _compute_segment_durations(bpms)
 
-    result = [(_compute_beat_absolute_time(offset, bpms, durations, i * 4),
-               _compute_beat_absolute_time(offset, bpms, durations, (i+1) * 4))
-         for (i, _measure) in enumerate(notes)]
+    result = [(_compute_beat_absolute_time(offset, bpms, durations, beat),
+               _compute_beat_absolute_time(offset, bpms, durations, beat+1))
+         for beat in range(len(notes) * 4)]
 
     return result
+
+def _compute_beat_bpms(offset, bpms, notes) -> list[tuple[float, float]]:
+    """Returns a list with the bpm at the start of each beat"""
+
+    result = []
+
+    assert len(bpms) >= 1
+
+    def get_bpm(beat):
+        for bpm_beat, bpm_value in bpms:
+            if beat + _EPSILON >= bpm_beat:
+                return bpm_value
+        return bpms[-1][1]
+
+    # TODO: optimize this 
+    return [get_bpm(beat) for beat in range(len(notes) * 4)]
+
 
 def run_chart(chart: RefinedChart):
     """Simulates in real time, the notes of a refined chart."""
