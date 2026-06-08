@@ -31,7 +31,17 @@ def _(pickle):
 
 @app.cell(hide_code=True)
 def _(files, get_stepfile):
-    stepfiles = [get_stepfile(file) for file in files]
+    all_stepfiles = [get_stepfile(file) for file in files]
+
+    return (all_stepfiles,)
+
+
+@app.cell(hide_code=True)
+def _(all_stepfiles):
+    # filtering files with flipped _V or _H prefix
+
+    stepfiles = [stepfile._replace(charts=[chart for chart in stepfile.charts if '_' not in chart.description]) 
+                 for stepfile in all_stepfiles]
     return (stepfiles,)
 
 
@@ -47,8 +57,7 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(np, stepfiles):
-    all_chartcounts = np.array([len(stepfile.charts) / 2 for stepfile in stepfiles])
-    # / 2 because of mirroring
+    all_chartcounts = np.array([len(stepfile.charts) for stepfile in stepfiles])
 
     chartcounts = all_chartcounts[all_chartcounts > 0] 
     return (chartcounts,)
@@ -101,7 +110,7 @@ def _(md_list, mo, stepfiles):
 
 @app.cell(hide_code=True)
 def _(md_list, mo, stepfiles):
-    least_charted_files = [stepfile.info['TITLE'] for stepfile in stepfiles if len(stepfile.charts) / 2 == 1]
+    least_charted_files = [stepfile.info['TITLE'] for stepfile in stepfiles if len(stepfile.charts) == 1]
     least_charted_files
 
     mo.md(f'''
@@ -121,8 +130,7 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(stepfiles):
-    difficulties_per_stepfile = [[chart.description for chart in stepfile.charts if not chart.description.endswith('_V') 
-                     and not chart.description.endswith('_H')] for stepfile in stepfiles]
+    difficulties_per_stepfile = [[chart.description for chart in stepfile.charts] for stepfile in stepfiles]
     return (difficulties_per_stepfile,)
 
 
@@ -153,11 +161,6 @@ def _(difficulties, np):
     return counts, diff_range
 
 
-@app.cell
-def _():
-    return
-
-
 @app.cell(hide_code=True)
 def _(counts, diff_range, difficulties, np, plt):
     max_diff = max(difficulties) 
@@ -181,7 +184,7 @@ def _(counts, diff_range, difficulties, np, plt):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md("""
     ### Chart authorship analysis
@@ -224,63 +227,6 @@ def _(mo):
     mo.md("""
     # Appendix
     """)
-    return
-
-
-@app.cell
-def _(stepfiles):
-    file = [file for file in stepfiles if file.info['TITLE'] == 'Murdoch vs Otada'][0]
-
-
-    chart = [chart for chart in file.charts if chart.description == 'S16'][0]
-
-    chart.steps[0:8]
-    chart.beat_onset_vectors[1]
-    chart.bpms
-    return
-
-
-@app.cell
-def _(np):
-    stuff = np.random.randn(2,2)
-    return (stuff,)
-
-
-@app.cell
-def _(pickle):
-    with open('samples/Murdoch_vs_Otada.S9.chart.feat.bin', 'rb') as _f:
-        file1 = pickle.load(_f)
-    return (file1,)
-
-
-@app.cell
-def _(pickle):
-    with open('/tmp/Murdoch_vs_Otada.S9.chart.feat.bin', 'rb') as _f:
-        file2 = pickle.load(_f)
-    return (file2,)
-
-
-@app.cell
-def _(file1, file2, np):
-    np.mean((file1 - file2) ** 2)
-    return
-
-
-@app.cell
-def _(np, stuff):
-
-    ix = np.array([True, False, True])
-
-    thing = np.array([[1,2], [3,4]])
-
-    np.where(ix[:, None, None], np.stack([stuff, stuff, thing]), -1)
-
-    return
-
-
-@app.cell
-def _(np):
-    np.linspace(np.array([0.0, 10.0, 20.0]), np.array([1.0, 11.0, 21.0]), num=10)
     return
 
 
