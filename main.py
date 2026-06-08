@@ -272,9 +272,9 @@ def _generate_permutations(chart):
     return [
         chart._replace(DESCRIPTION=chart.DESCRIPTION + name, NOTES=apply(permutation))
         for permutation, name in [
-            (vertical, "_V"),
-            # TODO: apply horizontal flip on low level charts
-            # (horizontal, '_H'),
+            # TODO: apply vertical flip on low level charts
+            # (vertical, "_V"),
+            (horizontal, '_H'),
         ]
     ]
 
