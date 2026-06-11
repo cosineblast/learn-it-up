@@ -14,7 +14,7 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         # - 15 is the context window length, 7 frames before target frame, target frame, 7 frames after target frame
         # - 3 is the number of audio channels 
         # - 80 are the actiavtion values for each frequency, measured in logarithm, with frequency in mel scale
-        # Output: (Batch) tensor containing the [0,1] value for whether a frame should be placed at this position
+        # Output: (Batch) tensor containing the log-odds of the [0,1] value for whether a frame should be placed at this position
 
         self.convolution = nn.Sequential(
             nn.Conv2d(
@@ -59,7 +59,10 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         linear_result = self.mlp(with_difficulty)
 
         # Batch x 1
-        return nn.functional.sigmoid(linear_result)
+        output = torch.flatten(linear_result)
+
+        # Batch
+        return output
 
 class PumpItUpConvolutionOnset(nn.Module):
     def __init__(self):
@@ -162,5 +165,5 @@ class PumpItUpConvolutionOnset(nn.Module):
         linear_result = torch.reshape(_linear_result, (batch, unroll_length))
 
         # Batch x UnrollLength
-        return nn.functional.sigmoid(linear_result)
+        return linear_result
 
