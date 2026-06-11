@@ -90,14 +90,14 @@ def _(mo, stepfiles):
 
     mo.md(f'''
     ### Stepfiles with more than one offset in charts
-    {('\n'.join(['- ' + file.info['TITLE'] for file in stepfiles_with_weird_offsets]))}
+    {('\n'.join(['- ' + file.title for file in stepfiles_with_weird_offsets]))}
     ''')
     return
 
 
 @app.cell(hide_code=True)
 def _(md_list, mo, stepfiles):
-    chartless_files = [stepfile.info['TITLE'] for stepfile in stepfiles if len(stepfile.charts) == 0]
+    chartless_files = [stepfile.title for stepfile in stepfiles if len(stepfile.charts) == 0]
 
     mo.md(f"""
     ### Stepfiles whose all charts were filtered out (e.g have gimmicks)
@@ -110,7 +110,7 @@ def _(md_list, mo, stepfiles):
 
 @app.cell(hide_code=True)
 def _(md_list, mo, stepfiles):
-    least_charted_files = [stepfile.info['TITLE'] for stepfile in stepfiles if len(stepfile.charts) == 1]
+    least_charted_files = [stepfile.title for stepfile in stepfiles if len(stepfile.charts) == 1]
     least_charted_files
 
     mo.md(f'''

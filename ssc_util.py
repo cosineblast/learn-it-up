@@ -88,6 +88,7 @@ class RefinedChart(NamedTuple):
     offset: float
     bpms: list[tuple[float, float]]
     description: str
+    difficulty: int
     credit: str
     beat_start_end_times: list[tuple[float, float]]
     beat_bpms: list[float]
@@ -96,6 +97,8 @@ class RefinedChart(NamedTuple):
 # absolute time information in charts and absolute music file path
 class RefinedStepFile(NamedTuple):
     info: dict[str, str]
+    title: str
+    music: str
     charts: list[RefinedChart]
 
 def load_ssc(filename: str) -> StepFile:
@@ -253,8 +256,10 @@ def refine_stepfile(stepfile: StepFile, original_path) -> RefinedStepFile:
     absolute_music_path = (Path(original_path).parent / Path(stepfile.info["MUSIC"]).name).resolve()
 
     return RefinedStepFile(
-       info={**stepfile.info, 'MUSIC':str(absolute_music_path)},
-       charts=[refine_chart(chart) for chart in stepfile.charts]
+       info=stepfile.info,
+       charts=[refine_chart(chart) for chart in stepfile.charts],
+       title=stepfile.info['TITLE'],
+       music=str(absolute_music_path)
     )
 
 def refine_chart(chart: Chart) -> RefinedChart:
@@ -263,17 +268,24 @@ def refine_chart(chart: Chart) -> RefinedChart:
     beat_count = len(chart.NOTES) * 4
 
     refined_steps = _compute_steps_absolute_times(chart.OFFSET, chart.BPMS, chart.NOTES)
-    
+
     return RefinedChart(
         steps=refined_steps,
         offset=chart.OFFSET,
-        bpms= chart.BPMS,
-        description= chart.DESCRIPTION,
+        bpms=chart.BPMS,
+        description=chart.DESCRIPTION,
+        difficulty=_get_difficulty(chart.DESCRIPTION),
         credit = chart.CREDIT,
         beat_start_end_times=_compute_beat_times(chart.OFFSET, chart.BPMS, beat_count),
         beat_bpms=_compute_beat_bpms(chart.BPMS, beat_count),
         beat_onset_vectors=_compute_beat_onset_vectors(refined_steps, beat_count)
     )
+
+def _get_difficulty(description: str) -> int:
+    if '_' in description:
+        return int(description[1:description.index('_')])
+    else:
+        return int(description[1:])
 
 def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
     """

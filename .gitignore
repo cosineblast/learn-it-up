@@ -9,3 +9,4 @@ data/partitions.json
 data/features
 samples
 .venv
+.hypothesis

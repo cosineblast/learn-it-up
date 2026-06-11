@@ -188,7 +188,7 @@ def extract_all():
         with open(file, "rb") as f:
             refined_stepfile = ssc_util.load_refined_stepfile(f)
 
-        source = refined_stepfile.info["MUSIC"]
+        source = refined_stepfile.music
         destination = _get_destination_path_for_features(file)
 
         print(">>> Extracting features for {} into {}...".format(source, destination))
