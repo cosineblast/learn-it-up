@@ -138,11 +138,15 @@ def parse_all():
 
     sscs = sorted(glob.glob("data/songs/**/*.ssc", recursive=True))
 
-    print("About to parse {} .ssc files".format(len(sscs)))
+    print("Found {} .ssc files".format(len(sscs)))
+    print('Skipping shortcut and full song sscs.')
+
+    ok_sscs = [ssc for ssc in sscs if _file_name_ok(ssc)]
+    print("Parsing {} .ssc files".format(len(ok_sscs)))
 
     os.makedirs("data/parsed", exist_ok=True)
 
-    for file in sscs:
+    for file in ok_sscs:
         print("<<< Parsing SSC file", file)
 
         stepfile = ssc_util.load_ssc(file)
@@ -171,6 +175,9 @@ def parse_all():
         with open(destination_path, "wb") as f:
             ssc_util.dump_refined_stepfile(refined_stepfile, f)
 
+def _file_name_ok(path: str):
+    name = Path(path).name.upper()
+    return 'FULL SONG' not in name  and 'SHORT CUT' not in name
 
 # This command extracts features for all song files
 def extract_all():
