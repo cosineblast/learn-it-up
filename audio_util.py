@@ -77,7 +77,7 @@ class AudioFeatureLoader:
         if self.log_scale:
             feat_channels = np.log(feat_channels + 1e-16)
 
-        return feat_channels
+        return feat_channels.astype(np.float32)
 
 
 def _run_pipeline(pipeline, value):
