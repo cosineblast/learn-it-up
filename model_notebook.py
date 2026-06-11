@@ -94,7 +94,7 @@ def _(audio_loader, loading, test_paths, test_stepfiles):
 def _(audio_loader, loading, validation_paths, validation_stepfiles):
     validation_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(validation_stepfiles, validation_paths, audio_loader)
     len(validation_dataset)
-    return
+    return (validation_dataset,)
 
 
 @app.cell
@@ -112,9 +112,12 @@ def _():
 
 
 @app.cell
-def _(DataLoader, training_dataset):
-    training_loader =  DataLoader(training_dataset, batch_size=256, shuffle=True)
-    return (training_loader,)
+def _(DataLoader, training_dataset, validation_dataset):
+    BATCH_SIZE = 256
+
+    training_loader =  DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
+    return BATCH_SIZE, training_loader, validation_loader
 
 
 @app.cell
@@ -130,17 +133,30 @@ def _(training_loader):
     from itertools import islice
     from tqdm import tqdm
     thing = iter(training_loader)
-    return islice, thing, tqdm
+    return (tqdm,)
 
 
 @app.cell
-def _(cnn_model, device, islice, loss_fn, optimizer, thing, torch, tqdm):
-
+def _(
+    BATCH_SIZE,
+    cnn_model,
+    device,
+    loss_fn,
+    optimizer,
+    torch,
+    tqdm,
+    training_dataset,
+    training_loader,
+):
+    from math import ceil 
 
     def train_epoch():
-        size = 100
+        cnn_model.train()
 
-        bar = tqdm(enumerate(islice(thing, size)), total=size)
+        size = ceil(len(training_dataset) / BATCH_SIZE)
+
+        bar = tqdm(enumerate(training_loader), total=size, unit='batch')
+
         for batch, ((frames, difficulties), y) in bar:
             # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
             frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
@@ -158,17 +174,79 @@ def _(cnn_model, device, islice, loss_fn, optimizer, thing, torch, tqdm):
             optimizer.step()
             optimizer.zero_grad()
 
-            if batch % 10 == 0:
-                bar.set_description(f'batch: {batch} loss: {loss.item()} Progress')
+            if batch % 100 == 0:
+                bar.set_description(f'loss: {loss.item()} Progress')
 
 
-    return (train_epoch,)
+    return ceil, train_epoch
 
 
 @app.cell
 def _(train_epoch):
-
     train_epoch()
+    return
+
+
+@app.cell
+def _(cnn_model, torch, train_epoch):
+    for epoch in range(100):
+        train_epoch()
+
+    torch.save(cnn_model.state_dict(), 'cnn_model.pth')
+    return
+
+
+@app.cell
+def _(
+    BATCH_SIZE,
+    ceil,
+    cnn_model,
+    device,
+    loss_fn,
+    torch,
+    tqdm,
+    validation_dataset,
+    validation_loader,
+):
+    def evaluate_validation():
+        cnn_model.eval()
+
+        size = ceil(len(validation_dataset) / BATCH_SIZE)
+
+        bar = tqdm(enumerate(validation_loader), total=size)
+
+        loss_mean = torch.tensor(0.0).to(device)
+        count = 0
+
+        with torch.no_grad():
+            for batch, ((frames, difficulties), y) in bar:
+                # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
+                frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
+                difficulties = difficulties.float().to(device)
+                y = y.float().to(device)
+
+                pred = cnn_model(frames, difficulties)
+
+                loss = loss_fn(pred, y)
+
+                loss_mean += torch.mean(loss)
+                count += 1 
+
+                if batch % 100 == 0:
+                    bar.set_description(f'loss: {loss.item()} Progress')
+
+
+        return loss_mean / count
+
+
+
+
+    return (evaluate_validation,)
+
+
+@app.cell
+def _(evaluate_validation):
+    evaluate_validation()
     return
 
 
