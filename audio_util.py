@@ -13,7 +13,7 @@ class AudioFeatureLoader:
         mel_bands=80,
         mel_lowest_frequency=27.5,
         mel_highest_frequency=16000.0,
-        frame_hop=512,
+        frame_hop=441,
         log_scale=True,
         use_tqdm=False,
     ):
