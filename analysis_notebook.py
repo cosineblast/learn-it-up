@@ -32,7 +32,6 @@ def _(pickle):
 @app.cell(hide_code=True)
 def _(files, get_stepfile):
     all_stepfiles = [get_stepfile(file) for file in files]
-
     return (all_stepfiles,)
 
 
@@ -84,14 +83,14 @@ def _(chartcounts, plt):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo, stepfiles):
+@app.cell
+def _(md_list, mo, stepfiles):
     stepfiles_with_weird_offsets = [stepfile for stepfile in stepfiles if len(set(chart.offset for chart in stepfile.charts)) > 1]
 
     mo.md(f'''
     ### Stepfiles with more than one offset in charts
-    {('\n'.join(['- ' + file.title for file in stepfiles_with_weird_offsets]))}
-    ''')
+    {md_list(['- ' + file.title for file in stepfiles_with_weird_offsets])}
+    '''.format())
     return
 
 

@@ -3,16 +3,16 @@ name = "learn-it-up"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "essentia>=2.1b6.dev1389",
     "msdparser>=2.0.0",
-    "tqdm>=4.68.1",
+    "tqdm>=4.67.3",
 ]
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6.155.2",
+    "hypothesis>=6.124.7",
     "marimo>=0.23.9",
     "matplotlib>=3.10.9",
     "python-lsp-server>=1.14.0",

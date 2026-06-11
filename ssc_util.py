@@ -417,7 +417,7 @@ def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count):
             index = 48 * step_time
 
             # 1/48th beat = 1/192th measure
-            assert index.is_integer(), \
+            assert index.denominator == 1, \
                 (f"""Step at beat {step.time_in_beats} has beat fraction that cannot fit in the 1/192 th note precision used by this model."""
                 """Please edit this stepfile so that all notes can fit in a precision of integer multiples of 192th notes.""")
 
