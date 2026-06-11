@@ -151,6 +151,11 @@ def parse_all():
             chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)
         ]
 
+        if len(charts) == 0:
+            print('>>> Skipping file {} since all of its charts were filtered out'.format(file))
+            print()
+            continue
+
         charts += [
             new_chart for chart in charts for new_chart in _generate_permutations(chart)
         ]
