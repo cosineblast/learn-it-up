@@ -20,8 +20,9 @@ StepfileStats = namedtuple('StepfileStats', ['len_frames', 'chart_stats'])
 DEFAULT_VALUE = np.log(1e-16)
 
 class LoadFeaturesCached():
-    def __init__(self):
+    def __init__(self, normalize_features=True):
         self.cache = {}
+        self.normalize_features = normalize_features
 
     def __call__(self, path):
         if path in self.cache:
@@ -29,6 +30,10 @@ class LoadFeaturesCached():
 
         with open(path, 'rb') as f:
             features = pickle.load(f)
+
+            if self.normalize_features:
+                features = (features - np.mean(features, axis=0)) / np.std(features, axis=0)
+
             self.cache[path] = features
             return features
 
@@ -37,8 +42,8 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.len_frames
 
-    def __init__(self, stepfiles, paths, loader):
-        all_features = [loader(get_feature_path_for(path)) for path in paths]
+    def __init__(self, stepfiles, paths, audio_loader, transform_x=(lambda x:x), transform_y=(lambda y:y)):
+        all_features = [audio_loader(get_feature_path_for(path)) for path in paths]
 
         def get_chart_stats(chart, features):
             first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
@@ -69,12 +74,13 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         self.stepfile_stats = stepfile_stats
         self.len_frames = len_frames
-        self.loader = loader
         self.all_features = all_features 
         self.stepfiles = stepfiles
 
         self.stepfile_len_sums = list(itertools.accumulate(stats.len_frames for stats in stepfile_stats))
         self.stepfile_lens = list((stats.len_frames for stats in stepfile_stats))
+        self.transform_x = transform_x
+        self.transform_y = transform_y
 
 
     def _get_target_chart(self, file, file_stats, target_index, total):
@@ -174,7 +180,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
         is_step = (False if next_step is None else 
                    floor(next_step.time_in_seconds * FRAMES_PER_SECOND) == feature_index)
 
-        return (frames, difficulty), is_step
+        return self.transform_x((frames, difficulty)), self.transform_y(is_step)
 
 def get_feature_path_for(refined_stepfile_path):
     assert str(refined_stepfile_path).endswith(".ssc.bin")
