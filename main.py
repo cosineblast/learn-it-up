@@ -263,7 +263,7 @@ def _generate_permutations(chart):
     vertical = {dl: ul, ul: dl, m: m, ur: dr, dr: ur}
     horizontal = {dl: dr, ul: ur, m: m, ur: ul, dr: dl}
 
-    permute = lambda step, permutation: [step[permutation[i]] for i in range(5)]
+    permute = lambda step, permutation: ''.join([step[permutation[i]] for i in range(5)])
 
     apply = lambda permutation: (
         [[permute(step, permutation) for step in measure] for measure in chart.NOTES]
