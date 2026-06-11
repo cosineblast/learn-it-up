@@ -230,6 +230,8 @@ def partition(seed):
     for i, file in enumerate(all_refined_files):
         files_per_partition[get_partition_for_index(i)].append(file)
 
+    print('Writing dataset partitions to data/partitions.json')
+
     with open("data/partitions.json", "w") as f:
         json.dump(files_per_partition, f, indent=2)
 
