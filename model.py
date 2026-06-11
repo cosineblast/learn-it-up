@@ -81,15 +81,13 @@ def _(get_feature_path_for, np, torch):
     DEFAULT_VALUE = np.log(1e-16)
 
     class PIUC_CNN_Onset_Dataset(torch.utils.data.Dataset):
-    
+
         def __len__(self):
             return self.len_frames
 
-
-        
         def __init__(self, stepfiles, paths, loader):
             all_features = [loader(get_feature_path_for(path)) for path in paths]
-        
+
             def get_chart_stats(chart, features):
                 first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
                 last_frame_index = floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
@@ -103,20 +101,20 @@ def _(get_feature_path_for, np, torch):
 
                 # inclusive
                 return ChartStats(len_frames, first_frame_index, last_frame_index)
-            
+
             def get_stepfile_stats(stepfile, features):
                 assert len(stepfile.charts) > 0
 
                 chart_stats = [get_chart_stats(chart, features) for chart in stepfile.charts]
                 len_frames = sum(stat.len_frames for stat in chart_stats)
-            
+
                 return StepfileStats(len_frames, chart_stats)
 
 
             stepfile_stats = [get_stepfile_stats(stepfile, features) 
                               for features, stepfile in zip(all_features, stepfiles)]
             len_frames = sum(stat.len_frames for stat in stepfile_stats) 
-        
+
             self.stepfile_stats = stepfile_stats
             self.len_frames = len_frames
             self.loader = loader
@@ -127,7 +125,7 @@ def _(get_feature_path_for, np, torch):
             self.stepfile_lens = list((stats.len_frames for stats in stepfile_stats))
 
 
-        
+
 
         def _get_target_chart(self, file, file_stats, target_index, total):
             target_chart = None
@@ -158,7 +156,7 @@ def _(get_feature_path_for, np, torch):
                     r = m
                 else:
                     l = m
-                
+
             assert not (target_index < self.stepfile_len_sums[l])
             assert target_index < self.stepfile_len_sums[r]
 
@@ -174,6 +172,32 @@ def _(get_feature_path_for, np, torch):
             result[indices_bad] = DEFAULT_VALUE
             return result
 
+        def _get_next_step(self, steps, target_time):
+            if steps[0].time_in_seconds >= target_time:
+                return steps[0]
+
+            if steps[-1].time_in_seconds < target_time:
+                return None
+
+            l = 0
+            r = len(steps)-1
+
+            assert not (steps[l].time_in_seconds >= target_time)
+            assert steps[r].time_in_seconds >= target_time
+
+            while l+1!=r:
+                m = (l + r) // 2
+
+                if steps[m].time_in_seconds >= target_time:
+                    r = m
+                else:
+                    l = m
+                
+            assert not (steps[l].time_in_seconds >= target_time)
+            assert steps[r].time_in_seconds >= target_time
+
+            return steps[r]
+
         def __getitem__(self, target_index):
             assert isinstance(target_index, int)
             assert target_index < len(self)
@@ -188,49 +212,17 @@ def _(get_feature_path_for, np, torch):
 
             frames = self._get_frame_context(file_features, feature_index)
 
-        
+            next_step = self._get_next_step(chart.steps, feature_index / FRAMES_PER_SECOND)
 
-            return frames
+            difficulty = np.zeros(25)
+            difficulty[chart.difficulty-1] = 1.0
+        
+            is_step = (False if next_step is None else 
+                       floor(next_step.time_in_seconds * FRAMES_PER_SECOND) == feature_index)
+
+            return (frames, difficulty), is_step
 
     return (PIUC_CNN_Onset_Dataset,)
-
-
-@app.cell
-def _(dataset):
-    s0 = dataset[0]
-    s0.shape
-    # np.float32(-4397.8184)
-    return (s0,)
-
-
-@app.cell
-def _(dataset, s0):
-    import tqdm
-
-    for i in tqdm.tqdm(range(0, len(dataset)), total=len(dataset)):
-        break
-        try:
-            _d = dataset[i]
-        except IndexError as e:
-            print(e)
-            print(i)
-            break
-    
-        if _d.shape != s0.shape:
-            raise Exception('Expected database[{}].shape to equal {}, got {}', i, s0.shape, _d.shape)
-        
-        
-    
-
-
-    return
-
-
-@app.cell
-def _(dataset):
-    len(dataset)
-    # np.float64(14124822.0)
-    return
 
 
 @app.cell
@@ -243,6 +235,12 @@ def _(LoadFeaturesCached):
 def _(PIUC_CNN_Onset_Dataset, all_stepfiles, loader, stepfile_paths):
     dataset = PIUC_CNN_Onset_Dataset(all_stepfiles, stepfile_paths, loader)
     return (dataset,)
+
+
+@app.cell
+def _(dataset):
+    len(dataset)
+    return
 
 
 @app.cell
