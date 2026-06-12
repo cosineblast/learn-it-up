@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 class PumpItUpConvolutionCNNOnset(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout=0.5):
         super().__init__()
 
         # Input: 
@@ -40,10 +40,10 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(in_features=cnn_output_len_flattened + max_difficulty, out_features=256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(dropout),
             nn.Linear(in_features=256, out_features=128),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(dropout),
             nn.Linear(in_features=128, out_features=1)
         )
 
