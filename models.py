@@ -40,8 +40,10 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(in_features=cnn_output_len_flattened + max_difficulty, out_features=256),
             nn.ReLU(),
+            nn.Dropout(0.5),
             nn.Linear(in_features=256, out_features=128),
             nn.ReLU(),
+            nn.Dropout(0.5),
             nn.Linear(in_features=128, out_features=1)
         )
 
