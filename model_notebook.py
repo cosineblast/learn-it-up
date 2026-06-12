@@ -132,7 +132,7 @@ def _(DataLoader, training_dataset, validation_dataset):
 def _(cnn_model, nn, torch):
     loss_fn = nn.BCEWithLogitsLoss()
     # TODO: pick better optimizer
-    optimizer = torch.optim.Adam(cnn_model.parameters(), lr=0.001)
+    optimizer = torch.optim.SGD(cnn_model.parameters(), lr=0.1, weight_decay=1.0)
     return loss_fn, optimizer
 
 
@@ -182,7 +182,8 @@ def _(
                 optimizer.step()
                 optimizer.zero_grad()
     
-                bar.update(subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
+                if batch % 100 == 0:
+                    bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
 
     return ceil, train_epoch
@@ -242,7 +243,8 @@ def _(
                     total_label_positives += torch.sum(label_positives)
                     total_true_positives = torch.sum(true_positives)
     
-                    bar.update(subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
+                    if batch % 100 == 0:
+                        bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
     
                     batch_count += 1 
 
