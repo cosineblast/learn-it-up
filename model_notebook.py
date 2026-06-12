@@ -4,7 +4,7 @@ __generated_with = "0.23.9"
 app = marimo.App(width="medium")
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md("""
     # Training DDC models
@@ -12,24 +12,7 @@ def _(mo):
     return
 
 
-@app.cell
-def _():
-    import marimo as mo
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    import glob
-    import pickle
-    import numpy as np
-
-    import loading
-    import models
-
-
-    return F, loading, mo, models, nn, np, pickle, torch
-
-
-@app.cell
+@app.cell(hide_code=True)
 def _(torch):
     print('HasCuda:', torch.cuda.is_available())
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -37,8 +20,8 @@ def _(torch):
 
 
 @app.cell(hide_code=True)
-def _():
-    import json
+def _(json):
+    # Querying dataset partition splits
 
     with open('data/partitions.json') as _f:
         partitions = json.load(_f)
@@ -51,6 +34,7 @@ def _():
 
 @app.cell(hide_code=True)
 def _(pickle, test_paths, training_paths, validation_paths):
+    # Loading refined stepfiles
 
     def _get_stepfiles(paths):
         files = []
@@ -64,18 +48,6 @@ def _(pickle, test_paths, training_paths, validation_paths):
     test_stepfiles       = _get_stepfiles(test_paths)
     validation_stepfiles = _get_stepfiles(validation_paths)
     return test_stepfiles, training_stepfiles, validation_stepfiles
-
-
-@app.cell(hide_code=True)
-def _():
-    from pathlib import Path
-
-    def get_feature_path_for(refined_stepfile_path):
-        assert str(refined_stepfile_path).endswith(".ssc.bin")
-        return Path("data/features") / (Path(Path(refined_stepfile_path).stem).stem + ".feat.bin")
-
-
-    return
 
 
 @app.cell
@@ -106,20 +78,6 @@ def _(audio_loader, loading, validation_paths, validation_stepfiles):
 
 
 @app.cell
-def _(device, models):
-    cnn_model = models.PumpItUpConvolutionCNNOnset().float().to(device)
-    cnn_model
-    return (cnn_model,)
-
-
-@app.cell
-def _():
-    from torch.utils.data import DataLoader
-
-    return (DataLoader,)
-
-
-@app.cell
 def _(DataLoader, training_dataset, validation_dataset):
     BATCH_SIZE = 256
 
@@ -129,19 +87,17 @@ def _(DataLoader, training_dataset, validation_dataset):
 
 
 @app.cell
-def _(cnn_model, nn, torch):
-    loss_fn = nn.BCEWithLogitsLoss()
-    # TODO: pick better optimizer
-    optimizer = torch.optim.SGD(cnn_model.parameters(), lr=0.1, weight_decay=1.0)
-    return loss_fn, optimizer
+def _(device, models):
+    cnn_model = models.PumpItUpConvolutionCNNOnset().float().to(device)
+    cnn_model
+    return (cnn_model,)
 
 
 @app.cell
-def _(training_loader):
-    from itertools import islice
-    from tqdm import tqdm
-    thing = iter(training_loader)
-    return
+def _(cnn_model, nn, torch):
+    loss_fn = nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.SGD(cnn_model.parameters(), lr=0.1, weight_decay=1.0)
+    return loss_fn, optimizer
 
 
 @app.cell
@@ -170,18 +126,18 @@ def _(
                 frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
                 difficulties = difficulties.float().to(device)
                 y = y.float().to(device)
-    
+
                 pred = cnn_model(frames, difficulties)
-    
+
                 loss = loss_fn(pred, y)
-    
+
                 # Backpropagation
                 loss.backward()
-    
+
                 torch.nn.utils.clip_grad_norm_(cnn_model.parameters(), max_norm=5.0, error_if_nonfinite=True)
                 optimizer.step()
                 optimizer.zero_grad()
-    
+
                 if batch % 100 == 0:
                     bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
@@ -190,8 +146,23 @@ def _(
 
 
 @app.cell
-def _(train_epoch):
-    train_epoch()
+def _(cnn_model, evaluate_validation_per_chart, torch, train_epoch):
+    def train_epochs(epochs):
+        losses = []
+
+        for epoch in range(epochs):
+            train_epoch()
+
+            result = evaluate_validation_per_chart()
+
+            losses.append(result)
+
+            print()
+            print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
+
+            torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
+        return losses
+
     return
 
 
@@ -207,9 +178,7 @@ def _(
     validation_dataset,
     validation_loader,
 ):
-    from collections import namedtuple 
-
-    def evaluate_validation():
+    def evaluate_validation_overall():
         cnn_model.eval()
 
         size = ceil(len(validation_dataset) / BATCH_SIZE)
@@ -228,24 +197,24 @@ def _(
                     frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
                     difficulties = difficulties.float().to(device)
                     y = y.float().to(device)
-    
+
                     pred = cnn_model(frames, difficulties)
-    
+
                     loss = loss_fn(pred, y)
-    
+
                     loss_mean += torch.mean(loss)
-    
+
                     positives = y == 1.0
                     label_positives = pred > 0.5
                     true_positives = positives & label_positives
-    
+
                     total_positives += torch.sum(positives)
                     total_label_positives += torch.sum(label_positives)
                     total_true_positives = torch.sum(true_positives)
-    
+
                     if batch % 100 == 0:
                         bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
-    
+
                     batch_count += 1 
 
         precision = 0.0 if total_label_positives == 0 else total_true_positives / total_label_positives
@@ -256,33 +225,76 @@ def _(
 
 
 
-    return (evaluate_validation,)
-
-
-@app.cell
-def _(evaluate_validation):
-    evaluate_validation()
     return
 
 
 @app.cell
-def _(cnn_model, evaluate_validation, torch, train_epoch):
-    def train_epochs(epochs):
-        losses = []
+def _(
+    audio_loader,
+    cnn_model,
+    device,
+    evaluation,
+    get_feature_path_for,
+    loss_fn,
+    mo,
+    namedtuple,
+    validation_paths,
+    validation_stepfiles,
+):
+    FullEvaluation = namedtuple('FullEvaluation', 
+                                ['total_true_positives', 'total_label_positives', 'total_positives', 'avg_precision', 
+                                'avg_recall', 'avg_f1', 'avg_loss', 'avg_auc_score'])
 
-        for epoch in range(epochs):
-            train_epoch()
+    def evaluate_validation_per_chart():
+        chart_count = sum(len(stepfile.charts) for stepfile in validation_stepfiles)
 
-            loss = evaluate_validation()
+        total_true_positives = 0
+        total_label_positives = 0
+        total_positives = 0
 
-            losses.append(loss)
+        sum_precision = 0
+        sum_recall = 0
+        sum_f1 = 0
 
-            print()
-            print(f'epoch {epoch+1}/{epochs}. eval={loss}')
+        sum_mean_loss = 0
 
-            torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
-        return losses
+        sum_auc = 0
 
+        with mo.status.progress_bar(total=chart_count) as bar:
+            for stepfile, path in zip(validation_stepfiles, validation_paths):
+                features = audio_loader(get_feature_path_for(path))
+
+                for chart in stepfile.charts:
+                    result = evaluation.measure_onset_performance(cnn_model, chart, features, loss_fn, device)
+
+                    total_true_positives += result.true_positives
+                    total_label_positives += result.label_positives
+                    total_positives += result.total_positives
+
+                    precision = 0 if result.label_positives   == 0 else result.true_positives / result.label_positives
+                    recall    = 0 if result.total_positives   == 0 else result.true_positives / result.total_positives
+                    f1        = 0 if precision == 0 or recall == 0 else 2/(1/precision + 1/recall)
+                    sum_precision += precision 
+                    sum_recall += recall 
+                    sum_f1 += f1
+
+                    sum_mean_loss += result.mean_loss
+
+                    sum_auc += result.auc_score
+
+                    bar.update()
+
+        return FullEvaluation(total_true_positives, total_label_positives, total_positives, 
+                              sum_precision / chart_count, sum_recall / chart_count, sum_f1 / chart_count,
+                              sum_mean_loss / chart_count,
+                              sum_auc / chart_count) 
+
+    return (evaluate_validation_per_chart,)
+
+
+@app.cell
+def _(evaluate_validation_per_chart):
+    evaluate_validation_per_chart()
     return
 
 
@@ -338,6 +350,63 @@ def _(F, torch):
 def _(full_difficulty_data, full_model, full_model_data):
     full_model(full_model_data, full_difficulty_data)
     return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    # Appendix
+    """)
+    return
+
+
+@app.cell
+def _():
+    import marimo as mo
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import glob
+    import pickle
+    import numpy as np
+    import loading
+    import models
+    import json
+    import evaluation
+    from collections import namedtuple
+
+    return (
+        F,
+        evaluation,
+        json,
+        loading,
+        mo,
+        models,
+        namedtuple,
+        nn,
+        np,
+        pickle,
+        torch,
+    )
+
+
+@app.cell
+def _():
+    from pathlib import Path
+
+    def get_feature_path_for(refined_stepfile_path):
+        assert str(refined_stepfile_path).endswith(".ssc.bin")
+        return Path("data/features") / (Path(Path(refined_stepfile_path).stem).stem + ".feat.bin")
+
+
+    return (get_feature_path_for,)
+
+
+@app.cell
+def _():
+    from torch.utils.data import DataLoader
+
+    return (DataLoader,)
 
 
 if __name__ == "__main__":
