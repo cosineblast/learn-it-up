@@ -10,3 +10,4 @@ data/features
 samples
 .venv
 .hypothesis
+*.pth

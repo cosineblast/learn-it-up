@@ -5,6 +5,14 @@ app = marimo.App(width="medium")
 
 
 @app.cell
+def _(mo):
+    mo.md("""
+    # Training DDC models
+    """)
+    return
+
+
+@app.cell
 def _():
     import marimo as mo
     import torch
@@ -124,7 +132,7 @@ def _(DataLoader, training_dataset, validation_dataset):
 def _(cnn_model, nn, torch):
     loss_fn = nn.BCEWithLogitsLoss()
     # TODO: pick better optimizer
-    optimizer = torch.optim.SGD(cnn_model.parameters(), lr=1e-1)
+    optimizer = torch.optim.Adam(cnn_model.parameters(), lr=0.001)
     return loss_fn, optimizer
 
 
@@ -133,7 +141,7 @@ def _(training_loader):
     from itertools import islice
     from tqdm import tqdm
     thing = iter(training_loader)
-    return (tqdm,)
+    return
 
 
 @app.cell
@@ -142,9 +150,9 @@ def _(
     cnn_model,
     device,
     loss_fn,
+    mo,
     optimizer,
     torch,
-    tqdm,
     training_dataset,
     training_loader,
 ):
@@ -155,27 +163,26 @@ def _(
 
         size = ceil(len(training_dataset) / BATCH_SIZE)
 
-        bar = tqdm(enumerate(training_loader), total=size, unit='batch')
+        with mo.status.progress_bar(total=size, title='Training...', remove_on_exit=True) as bar:
 
-        for batch, ((frames, difficulties), y) in bar:
-            # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
-            frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
-            difficulties = difficulties.float().to(device)
-            y = y.float().to(device)
-
-            pred = cnn_model(frames, difficulties)
-
-            loss = loss_fn(pred, y)
-
-            # Backpropagation
-            loss.backward()
-
-            torch.nn.utils.clip_grad_norm_(cnn_model.parameters(), max_norm=5.0, error_if_nonfinite=True)
-            optimizer.step()
-            optimizer.zero_grad()
-
-            if batch % 100 == 0:
-                bar.set_description(f'loss: {loss.item()} Progress')
+            for batch, ((frames, difficulties), y) in enumerate(training_loader):
+                # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
+                frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
+                difficulties = difficulties.float().to(device)
+                y = y.float().to(device)
+    
+                pred = cnn_model(frames, difficulties)
+    
+                loss = loss_fn(pred, y)
+    
+                # Backpropagation
+                loss.backward()
+    
+                torch.nn.utils.clip_grad_norm_(cnn_model.parameters(), max_norm=5.0, error_if_nonfinite=True)
+                optimizer.step()
+                optimizer.zero_grad()
+    
+                bar.update(subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
 
     return ceil, train_epoch
@@ -188,55 +195,61 @@ def _(train_epoch):
 
 
 @app.cell
-def _(cnn_model, torch, train_epoch):
-    for epoch in range(100):
-        train_epoch()
-
-    torch.save(cnn_model.state_dict(), 'cnn_model.pth')
-    return
-
-
-@app.cell
 def _(
     BATCH_SIZE,
     ceil,
     cnn_model,
     device,
     loss_fn,
+    mo,
     torch,
-    tqdm,
     validation_dataset,
     validation_loader,
 ):
+    from collections import namedtuple 
+
     def evaluate_validation():
         cnn_model.eval()
 
         size = ceil(len(validation_dataset) / BATCH_SIZE)
 
-        bar = tqdm(enumerate(validation_loader), total=size)
-
         loss_mean = torch.tensor(0.0).to(device)
-        count = 0
+        batch_count = 0
 
-        with torch.no_grad():
-            for batch, ((frames, difficulties), y) in bar:
-                # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
-                frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
-                difficulties = difficulties.float().to(device)
-                y = y.float().to(device)
+        total_positives = 0.0
+        total_label_positives = 0.0
+        total_true_positives = 0.0
 
-                pred = cnn_model(frames, difficulties)
+        with mo.status.progress_bar(total=size, title='Validating...', remove_on_exit=True) as bar:
+            with torch.no_grad():
+                for batch, ((frames, difficulties), y) in enumerate(validation_loader):
+                    # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
+                    frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
+                    difficulties = difficulties.float().to(device)
+                    y = y.float().to(device)
+    
+                    pred = cnn_model(frames, difficulties)
+    
+                    loss = loss_fn(pred, y)
+    
+                    loss_mean += torch.mean(loss)
+    
+                    positives = y == 1.0
+                    label_positives = pred > 0.5
+                    true_positives = positives & label_positives
+    
+                    total_positives += torch.sum(positives)
+                    total_label_positives += torch.sum(label_positives)
+                    total_true_positives = torch.sum(true_positives)
+    
+                    bar.update(subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
+    
+                    batch_count += 1 
 
-                loss = loss_fn(pred, y)
+        precision = 0.0 if total_label_positives == 0 else total_true_positives / total_label_positives
+        recall = total_true_positives / total_positives
 
-                loss_mean += torch.mean(loss)
-                count += 1 
-
-                if batch % 100 == 0:
-                    bar.set_description(f'loss: {loss.item()} Progress')
-
-
-        return loss_mean / count
+        return (loss_mean / batch_count, precision, recall)
 
 
 
@@ -250,6 +263,27 @@ def _(evaluate_validation):
     return
 
 
+@app.cell
+def _(cnn_model, evaluate_validation, torch, train_epoch):
+    def train_epochs(epochs):
+        losses = []
+
+        for epoch in range(epochs):
+            train_epoch()
+
+            loss = evaluate_validation()
+
+            losses.append(loss)
+
+            print()
+            print(f'epoch {epoch+1}/{epochs}. eval={loss}')
+
+            torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
+        return losses
+
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
@@ -259,15 +293,15 @@ def _(mo):
 
 
 @app.cell
-def _(np, torch):
-    cnn_sample_data = torch.tensor(np.random.randn(10, 3, 15, 80)).type(torch.float32)
+def _(device, np, torch):
+    cnn_sample_data = torch.tensor(np.random.randn(10, 3, 15, 80)).type(torch.float32).to(device)
     cnn_sample_data.shape
     return (cnn_sample_data,)
 
 
 @app.cell
-def _(F, torch):
-    cnn_difficulty_data = F.one_hot(torch.tensor([15]).repeat(10), num_classes=25).type(torch.float32)
+def _(F, device, torch):
+    cnn_difficulty_data = F.one_hot(torch.tensor([15]).repeat(10), num_classes=25).type(torch.float32).to(device)
     cnn_difficulty_data.shape
     return (cnn_difficulty_data,)
 
@@ -275,12 +309,6 @@ def _(F, torch):
 @app.cell
 def _(cnn_difficulty_data, cnn_model, cnn_sample_data):
     cnn_model(cnn_sample_data, cnn_difficulty_data)
-    return
-
-
-@app.cell
-def _(full_difficulty_data, full_model, full_model_data):
-    full_model(full_model_data, full_difficulty_data)
     return
 
 
@@ -305,8 +333,8 @@ def _(F, torch):
 
 
 @app.cell
-def _(full_difficulty_data, torch):
-    torch.reshape(full_difficulty_data, (1, 1, 25)).repeat((1, 100, 1)).shape
+def _(full_difficulty_data, full_model, full_model_data):
+    full_model(full_model_data, full_difficulty_data)
     return
 
 
