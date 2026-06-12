@@ -6,7 +6,9 @@ import pickle
 
 import json
 import os
+import time
 
+from playsound3 import playsound, AVAILABLE_BACKENDS
 
 def inspect_chart(filename: str):
     print("Reading file {}".format(filename))
@@ -25,7 +27,7 @@ def inspect_chart(filename: str):
     print("available charts:", [chart.DESCRIPTION for chart in charts])
 
 
-def simulate_chart(filename: str, chart_name):
+def simulate_chart(filename: str, chart_name, audio):
     print("Reading file {}".format(filename))
 
     stepfile = ssc_util.load_ssc(filename)
@@ -39,7 +41,7 @@ def simulate_chart(filename: str, chart_name):
     for chart in charts:
         if chart.DESCRIPTION == chart_name:
             refined = ssc_util.refine_chart(chart)
-            ssc_util.run_chart(refined)
+            _run_chart(refined, audio)
 
 
 def extract_single(source, destination):
@@ -77,6 +79,40 @@ def resample_single(features_file, refined_file, chartname, destination):
         pickle.dump(resampled, f)
 
 
+def _run_chart(chart: ssc_util.RefinedChart, audio_path=None):
+    """Simulates in real time, the notes of a refined chart."""
+        
+    steps = [step for step in chart.steps if step.stepcode != "00000"]
+
+    if audio_path is None:
+        input("PRESS ENTER FOR FIRST STEP...")
+    else:
+        playsound(audio_path, block=False, backend='ffplay')
+        time.sleep(steps[0].time_in_seconds)
+
+    def show_step(step):
+        code = "".join(["-" if x == "0" else x for x in step.stepcode])
+        print(
+            "[{:10.4f}]({:10.4f}) {}".format(
+                float(step.time_in_beats), step.time_in_seconds, code
+            )
+        )
+        
+    show_step(steps[0])
+
+    base_music_time = steps[0].time_in_seconds
+    base_real_time = time.time()
+
+    for step in steps[1:]:
+        to_sleep = (step.time_in_seconds - base_music_time) - (
+            time.time() - base_real_time
+        )
+
+        time.sleep(max(0, to_sleep))
+        show_step(step)
+
+    time.sleep(2)
+
 
 def parse_single(source, destination):
     print("Parsing SSC file {} into {}".format(source, destination))
@@ -89,3 +125,37 @@ def parse_single(source, destination):
 
     with open(destination, "wb") as f:
         ssc_util.dump_refined_stepfile(refined, f)
+
+
+def add_subparsers(subparsers):
+    inspect = subparsers.add_parser(
+        "inspect", help="Inspect relevant attributes of a PIU SSC file"
+    )
+    inspect.add_argument("filename")
+
+    simulate = subparsers.add_parser(
+        "simulate", help="Simulate timing of a PIU SSC chart"
+    )
+    simulate.add_argument("filename")
+    simulate.add_argument("--chart", default=None)
+    simulate.add_argument("--audio", default=None)
+
+    extract = subparsers.add_parser(
+        "extract_single", help="Extract audio information from file"
+    )
+    extract.add_argument("input_file")
+    extract.add_argument("output_file")
+
+    parse_single = subparsers.add_parser(
+        "parse_single", help="Parse SSC file into a refined file with absoute time info"
+    )
+    parse_single.add_argument("input_file")
+    parse_single.add_argument("output_file")
+
+    resample_single = subparsers.add_parser(
+        "resample_single", help="Resample an attribute file to fit BPMs of a chart (debug)"
+    )
+    resample_single.add_argument("features")
+    resample_single.add_argument("--sscbin")
+    resample_single.add_argument("--chart")
+    resample_single.add_argument("destination")

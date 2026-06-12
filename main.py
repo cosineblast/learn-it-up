@@ -51,7 +51,7 @@ def main():
             misc_commands.inspect_chart(args.filename)
 
         case "simulate":
-            misc_commands.simulate_chart(args.filename, args.chart)
+            misc_commands.simulate_chart(args.filename, args.chart, args.audio)
 
         case "extract_single":
             misc_commands.extract_single(args.input_file, args.output_file)
@@ -62,7 +62,6 @@ def main():
         case "resample_single":
             misc_commands.resample_single(args.features, args.sscbin, args.chart, args.destination)
 
-        case "parse_all":
             parse_all()
 
         case "extract_all":
@@ -79,36 +78,7 @@ def cli_parser():
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    inspect = subparsers.add_parser(
-        "inspect", help="Inspect relevant attributes of a PIU SSC file"
-    )
-    inspect.add_argument("filename")
-
-    simulate = subparsers.add_parser(
-        "simulate", help="Simulate timing of a PIU SSC chart"
-    )
-    simulate.add_argument("filename")
-    simulate.add_argument("--chart", default=None)
-
-    extract = subparsers.add_parser(
-        "extract_single", help="Extract audio information from file"
-    )
-    extract.add_argument("input_file")
-    extract.add_argument("output_file")
-
-    parse_single = subparsers.add_parser(
-        "parse_single", help="Parse SSC file into a refined file with absoute time info"
-    )
-    parse_single.add_argument("input_file")
-    parse_single.add_argument("output_file")
-
-    resample_single = subparsers.add_parser(
-        "resample_single", help="Resample an attribute file to fit BPMs of a chart (debug)"
-    )
-    resample_single.add_argument("features")
-    resample_single.add_argument("--sscbin")
-    resample_single.add_argument("--chart")
-    resample_single.add_argument("destination")
+    misc_commands.add_subparsers(subparsers)
 
     parse_all = subparsers.add_parser(
         "parse_all", help="Parse all charts in the data/songs into data/parsed"

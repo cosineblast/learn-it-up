@@ -428,39 +428,6 @@ def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count):
 
     return result
 
-    
-
-    
-
-def run_chart(chart: RefinedChart):
-    """Simulates in real time, the notes of a refined chart."""
-        
-    steps = [step for step in chart.steps if step.stepcode != "00000"]
-
-    input("PRESS ENTER FOR FIRST STEP...")
-
-    def show_step(step):
-        code = "".join(["-" if x == "0" else x for x in step.stepcode])
-        print(
-            "[{:10.4f}]({:10.4f}) {}".format(
-                float(step.time_in_beats), step.time_in_seconds, code
-            )
-        )
-
-    show_step(steps[0])
-
-    base_music_time = steps[0].time_in_seconds
-    base_real_time = time.time()
-
-    for step in steps[1:]:
-        to_sleep = (step.time_in_seconds - base_music_time) - (
-            time.time() - base_real_time
-        )
-
-        time.sleep(max(0, to_sleep))
-        show_step(step)
-
-
 _EPSILON = 1e-6
 
 
