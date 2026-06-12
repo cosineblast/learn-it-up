@@ -13,11 +13,13 @@ from pathlib import Path
 
 ChartStats = namedtuple('ChartStats', ['len_frames', 'first_frame_index', 'last_frame_index'])
 StepfileStats = namedtuple('StepfileStats', ['len_frames', 'chart_stats'])
+FeatureView =namedtuple('FeatureView', ['array', 'start', 'len'])
 
 
 # TODO: use default value as minimum value from features for each file, since
 # files have varying silences.
 DEFAULT_VALUE = np.log(1e-16)
+CONTEXT_RADIUS=7
 
 class LoadFeaturesCached():
     def __init__(self, normalize_features=True):
@@ -34,8 +36,12 @@ class LoadFeaturesCached():
             if self.normalize_features:
                 features = (features - np.mean(features, axis=0)) / np.std(features, axis=0)
 
-            self.cache[path] = features
-            return features
+            padding = np.ones((CONTEXT_RADIUS, 80, 3)) * DEFAULT_VALUE
+            padded = np.concat([padding, features, padding])
+            view = FeatureView(padded, CONTEXT_RADIUS, features.shape[0])
+
+            self.cache[path] = view
+            return view
 
 class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
@@ -53,7 +59,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
             assert len(chart.steps) >= 2
             assert first_frame_index >= 0
-            assert last_frame_index < features.shape[0]
+            assert last_frame_index < features.len
             assert first_frame_index < last_frame_index
 
             # inclusive
@@ -118,15 +124,9 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         return (self.stepfiles[r], self.stepfile_stats[r], self.all_features[r]), self.stepfile_len_sums[l]
 
-    def _get_frame_context(self, file_features, feature_index):
-        context_radius = 7
-        # +1 because it is inclusive
-        indices = np.arange(feature_index-context_radius, feature_index+context_radius+1).astype(int)
-        indices_bad = (indices < 0) | (indices > file_features.shape[0])
-        indices_clipped = np.clip(indices, 0, file_features.shape[0])
-        result = file_features[indices_clipped]
-        result[indices_bad] = DEFAULT_VALUE
-        return result
+    def _get_frame_context(self, view, feature_index):
+        array, start, length = view
+        return array[start+feature_index-CONTEXT_RADIUS:start+feature_index+CONTEXT_RADIUS+1]
 
     def _get_next_step(self, steps, target_time):
         if steps[0].time_in_seconds >= target_time:

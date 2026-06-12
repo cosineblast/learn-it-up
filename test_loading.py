@@ -57,12 +57,17 @@ class TestCNNDataset(unittest.TestCase):
         audio = np.zeros((3, 500)) + np.arange(500)
         audio = audio.transpose(1, 0)
 
+        self.audio = audio
+        audio_len = audio.shape[0]
+
+        padding = np.ones((7, 3)) * loading.DEFAULT_VALUE
+        padded_audio = np.concat([padding, audio, padding])
+
         def load_audio(path):
-            return audio
+            return loading.FeatureView(padded_audio, 7, audio_len)
 
         dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, paths, load_audio)
 
-        self.audio = audio
         self.dataset = dataset
 
     def context_around(self, i):
