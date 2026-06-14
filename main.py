@@ -62,6 +62,7 @@ def main():
         case "resample_single":
             misc_commands.resample_single(args.features, args.sscbin, args.chart, args.destination)
 
+        case "parse_all":
             parse_all()
 
         case "extract_all":
