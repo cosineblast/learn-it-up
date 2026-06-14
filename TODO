@@ -1,1 +1,2 @@
 - Do not go insane
+- Use min as default value for out-of-song features instead of log(1e-16)
