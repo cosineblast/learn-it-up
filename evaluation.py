@@ -41,9 +41,10 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     difficulties[chart.difficulty-1] = 1.0
     difficulties = np.tile(difficulties, (frame_features.shape[0], 1))
 
-    step_frames = np.array([frame_of(step) for step in chart.steps]) - first_frame
+    step_frames = np.array([frame_of(step) for step in chart.steps])
+    step_onsets = step_frames - first_frame
     ys = np.zeros(frame_features.shape[0], dtype=np.bool)
-    ys[step_frames] = True
+    ys[step_onsets] = True
 
     # running the model
 
@@ -60,7 +61,7 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     # analyzing onsets 
 
     pred_onsets = _get_pred_onsets(scores)
-    real_onsets = set(frame_of(step) for step in chart.steps)
+    real_onsets = set(step_onsets)
 
     # computing main metrics 
 
