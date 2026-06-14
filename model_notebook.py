@@ -243,7 +243,7 @@ def _(
 ):
     FullEvaluation = namedtuple('FullEvaluation', 
                                 ['total_true_positives', 'total_label_positives', 'total_positives', 'avg_precision', 
-                                'avg_recall', 'avg_f1', 'avg_loss', 'avg_auc_score'])
+                                'avg_recall', 'avg_f1', 'avg_loss', 'avg_raw_auc_score', 'avg_aligned_auc_score'])
 
     def evaluate_validation_per_chart():
         chart_count = sum(len(stepfile.charts) for stepfile in validation_stepfiles)
@@ -257,10 +257,11 @@ def _(
         sum_f1 = 0
 
         sum_mean_loss = 0
+    
+        sum_raw_auc = 0
+        sum_aligned_auc = 0
 
-        sum_auc = 0
-
-        with mo.status.progress_bar(total=chart_count) as bar:
+        with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
             for stepfile, path in zip(validation_stepfiles, validation_paths):
                 features = audio_loader(get_feature_path_for(path))
 
@@ -274,20 +275,23 @@ def _(
                     precision = 0 if result.label_positives   == 0 else result.true_positives / result.label_positives
                     recall    = 0 if result.total_positives   == 0 else result.true_positives / result.total_positives
                     f1        = 0 if precision == 0 or recall == 0 else 2/(1/precision + 1/recall)
+                
                     sum_precision += precision 
                     sum_recall += recall 
                     sum_f1 += f1
 
                     sum_mean_loss += result.mean_loss
 
-                    sum_auc += result.auc_score
+                    sum_raw_auc += result.raw_auc_score
+                    sum_aligned_auc += result.aligned_auc_score
 
                     bar.update()
 
         return FullEvaluation(total_true_positives, total_label_positives, total_positives, 
                               sum_precision / chart_count, sum_recall / chart_count, sum_f1 / chart_count,
                               sum_mean_loss / chart_count,
-                              sum_auc / chart_count) 
+                              sum_raw_auc / chart_count,
+                              sum_aligned_auc / chart_count) 
 
     return (evaluate_validation_per_chart,)
 

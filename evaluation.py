@@ -12,9 +12,15 @@ import scipy
 
 import sklearn
 
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
-Evaluation = namedtuple('Evaluation', ['true_positives', 'label_positives', 'total_positives', 'mean_loss', 'auc_score'])
+Evaluation = namedtuple('Evaluation', [
+                        'true_positives',
+                        'label_positives',
+                        'total_positives',
+                        'mean_loss',
+                        'raw_auc_score',
+                        'aligned_auc_score'])
 
 def measure_onset_performance(model, chart, features, loss_fn, device):
     first_frame = frame_of(chart.steps[0])
@@ -37,8 +43,8 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
 
         log_scores = model(frame_features, difficulties)
 
-        scores = F.sigmoid(log_scores).detach().numpy()
-        mean_loss = torch.mean(loss_fn(log_scores, ys_tensor)).detach().numpy()
+        scores = F.sigmoid(log_scores).detach().cpu().numpy()
+        mean_loss = torch.mean(loss_fn(log_scores, ys_tensor)).detach().cpu().numpy()
 
     pred_onsets = _get_pred_onsets(scores)
     real_onsets = set(frame_of(step) for step in chart.steps)
@@ -47,9 +53,58 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     label_positives = len(pred_onsets)
     true_positives = _compute_true_positives(pred_onsets, real_onsets)
 
-    auc_score = sklearn.metrics.roc_auc_score(ys, scores)
+    aligned_scores = ddc_align_scores_for_sklearn(real_onsets, pred_onsets, scores)
 
-    return Evaluation(true_positives, label_positives, total_positives, mean_loss, auc_score)
+    raw_auc_score = precision_recall_auc(ys, scores)
+    aligned_auc_score = precision_recall_auc(ys, aligned_scores)
+
+    return Evaluation(true_positives, label_positives, total_positives, mean_loss, raw_auc_score, aligned_auc_score)
+
+def precision_recall_auc(ys, scores):
+    precisions, recalls, thresholds = sklearn.metrics.precision_recall_curve(ys, scores)
+    return sklearn.metrics.auc(recalls, precisions)
+
+
+def ddc_align_scores_for_sklearn(true_onsets, pred_onsets, scores, tolerance=2):
+    # This function is adapted from DDC.
+
+    # Build one-to-many dicts of candidate matches
+    true_to_pred = defaultdict(list)
+    pred_to_true = defaultdict(list)
+
+    for true_idx in true_onsets:
+        for pred_idx in range(true_idx - tolerance, true_idx + tolerance + 1):
+            if pred_idx in pred_onsets:
+                true_to_pred[true_idx].append(pred_idx)
+                pred_to_true[pred_idx].append(true_idx)
+
+    # Create alignments
+    true_to_pred_confidence = {}
+    pred_idxs_used = set()
+    for pred_idx, true_idxs in pred_to_true.items():
+        true_idx_use = true_idxs[0]
+        if len(true_idxs) > 1:
+            for true_idx in true_idxs:
+                if len(true_to_pred[true_idx]) == 1:
+                    true_idx_use = true_idx
+                    break
+        true_to_pred_confidence[true_idx_use] = scores[pred_idx]
+        assert pred_idx not in pred_idxs_used
+        pred_idxs_used.add(pred_idx)
+
+    # Create confidence list
+    y_scores = np.zeros_like(scores)
+    for true_idx, confidence in true_to_pred_confidence.items():
+        y_scores[true_idx] = confidence
+
+    # Add remaining false positives
+    for fp_idx in pred_onsets - pred_idxs_used:
+        y_scores[fp_idx] = scores[fp_idx]
+
+    # the original DDC limited the scores between the valid range,
+    # but we dont have to do that because scores is already restrained
+    # for that range
+    return y_scores
 
 def _get_pred_onsets(scores):
     window_width = 5
