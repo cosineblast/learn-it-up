@@ -1,4 +1,7 @@
 
+# This module implements DDC-style performance evaluation for a model in a chart.
+# It is primarily used during training experimentation, to tell if the models are actually learning anything.
+
 FRAMES_PER_SECOND=100
 CONTEXT_RADIUS=7
 
@@ -15,14 +18,20 @@ import sklearn
 from collections import namedtuple, defaultdict
 
 Evaluation = namedtuple('Evaluation', [
-                        'true_positives',
-                        'label_positives',
-                        'total_positives',
+                        'precision',
+                        'recall',
+                        'fscore',
                         'mean_loss',
+                        'threshold_ideal',
                         'raw_auc_score',
-                        'aligned_auc_score'])
+                        'aligned_auc_score',
+                        'accuracy'
+                    ])
 
 def measure_onset_performance(model, chart, features, loss_fn, device):
+
+    # loading model input
+
     first_frame = frame_of(chart.steps[0])
     last_frame = frame_of(chart.steps[-1])
 
@@ -36,6 +45,8 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     ys = np.zeros(frame_features.shape[0], dtype=np.bool)
     ys[step_frames] = True
 
+    # running the model
+
     with torch.no_grad():
         ys_tensor = torch.tensor(ys).float().to(device)
         frame_features = torch.tensor(frame_features).transpose(1, 3).transpose(2, 3).float().to(device)
@@ -46,19 +57,40 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
         scores = F.sigmoid(log_scores).detach().cpu().numpy()
         mean_loss = torch.mean(loss_fn(log_scores, ys_tensor)).detach().cpu().numpy()
 
+    # analyzing onsets 
+
     pred_onsets = _get_pred_onsets(scores)
     real_onsets = set(frame_of(step) for step in chart.steps)
 
-    total_positives = len(real_onsets)
-    label_positives = len(pred_onsets)
-    true_positives = _compute_true_positives(pred_onsets, real_onsets)
+    # computing main metrics 
+
+    raw_precisions, raw_recalls, _ = sklearn.metrics.precision_recall_curve(ys, scores)
+    raw_auc_score = sklearn.metrics.auc(raw_recalls, raw_precisions)
 
     aligned_scores = ddc_align_scores_for_sklearn(real_onsets, pred_onsets, scores)
 
-    raw_auc_score = precision_recall_auc(ys, scores)
-    aligned_auc_score = precision_recall_auc(ys, aligned_scores)
+    precisions, recalls, thresholds = sklearn.metrics.precision_recall_curve(ys, aligned_scores)
+    aligned_auc_score = sklearn.metrics.auc(recalls, precisions)
 
-    return Evaluation(true_positives, label_positives, total_positives, mean_loss, raw_auc_score, aligned_auc_score)
+    precision, recall, fscore, threshold_ideal = get_best_metrics(precisions, recalls, thresholds)
+
+    # computing accuracy
+
+    predicted_steps = np.where(aligned_scores >= threshold_ideal)
+    y_labels = np.zeros(aligned_scores.shape[0], dtype=int)
+    y_labels[predicted_steps] = 1
+    accuracy = sklearn.metrics.accuracy_score(ys.astype(int), y_labels)
+
+    return Evaluation(precision, recall, fscore, mean_loss, threshold_ideal, raw_auc_score, aligned_auc_score, accuracy)
+
+def get_best_metrics(precisions, recalls, thresholds):
+    fscores_denom = precisions + recalls
+    fscores_denom[np.where(fscores_denom == 0.0)] = 1.0
+    fscores = (2 * (precisions * recalls)) / fscores_denom
+    fscore_max_idx = np.argmax(fscores)
+    return precisions[fscore_max_idx], recalls[fscore_max_idx], fscores[fscore_max_idx], thresholds[fscore_max_idx]
+
+
 
 def precision_recall_auc(ys, scores):
     precisions, recalls, thresholds = sklearn.metrics.precision_recall_curve(ys, scores)
