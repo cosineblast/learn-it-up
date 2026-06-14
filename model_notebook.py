@@ -96,7 +96,7 @@ def _(device, models):
 @app.cell
 def _(cnn_model, nn, torch):
     loss_fn = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.SGD(cnn_model.parameters(), lr=0.1, weight_decay=1.0)
+    optimizer = torch.optim.Adam(cnn_model.parameters(), lr=0.001, weight_decay=1e-4)
     return loss_fn, optimizer
 
 
@@ -146,9 +146,19 @@ def _(
 
 
 @app.cell
-def _(cnn_model, evaluate_validation_per_chart, torch, train_epoch):
+def _(
+    cnn_model,
+    evaluate_validation_per_chart,
+    np,
+    torch,
+    train_epoch,
+    training_paths,
+    training_stepfiles,
+):
     def train_epochs(epochs):
         losses = []
+        training_losses = []
+        best_score = -np.inf
 
         for epoch in range(epochs):
             train_epoch()
@@ -160,9 +170,22 @@ def _(cnn_model, evaluate_validation_per_chart, torch, train_epoch):
             print()
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
-            torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
-        return losses
+            if epoch % 10 == 0:
+                result = evaluate_validation_per_chart(training_stepfiles, training_paths)
+                training_losses.append(result)
+                print(f'epoch {epoch+1}/{epochs}. training evaluation={result}')
 
+            if result.avg_aligned_auc_score > best_score:
+                torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
+                best_score = result.avg_aligned_auc_score
+        return losses, training_losses
+
+    return (train_epochs,)
+
+
+@app.cell
+def _(train_epochs):
+    metrics = train_epochs(100)
     return
 
 
@@ -210,7 +233,7 @@ def _(
 
                     total_positives += torch.sum(positives)
                     total_label_positives += torch.sum(label_positives)
-                    total_true_positives = torch.sum(true_positives)
+                    total_true_positives += torch.sum(true_positives)
 
                     if batch % 100 == 0:
                         bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
@@ -245,21 +268,21 @@ def _(
                                 ['avg_precision',  'avg_recall', 'avg_fscore', 
                                  'avg_loss', 'avg_raw_auc_score', 'avg_aligned_auc_score', 'avg_accuracy'])
 
-    def evaluate_validation_per_chart():
-        chart_count = sum(len(stepfile.charts) for stepfile in validation_stepfiles)
+    def evaluate_validation_per_chart(stepfiles=validation_stepfiles, paths=validation_paths):
+        chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
 
         sum_precision = 0
         sum_recall = 0
         sum_fscore = 0
 
         sum_mean_loss = 0
-    
+
         sum_raw_auc = 0
         sum_aligned_auc = 0
         sum_accuracy = 0
 
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
-            for stepfile, path in zip(validation_stepfiles, validation_paths):
+            for stepfile, path in zip(stepfiles, paths):
                 features = audio_loader(get_feature_path_for(path))
 
                 for chart in stepfile.charts:
@@ -350,6 +373,11 @@ def _(mo):
     mo.md("""
     # Appendix
     """)
+    return
+
+
+@app.cell
+def _():
     return
 
 
