@@ -66,7 +66,7 @@ class TestEvaluationWorks(unittest.TestCase):
             features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
             difficulty_batch = difficulty_batch.numpy()
 
-            result = np.zeros(features_batch.shape[0])
+            result = np.zeros(features_batch.shape[0]) - 10
 
             for i in range(features_batch.shape[0]):
                 result[i] = perfect_model_single(features_batch[i], difficulty_batch[i])
@@ -80,7 +80,7 @@ class TestEvaluationWorks(unittest.TestCase):
             features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
             difficulty_batch = difficulty_batch.numpy()
 
-            result = np.zeros(features_batch.shape[0])
+            result = np.zeros(features_batch.shape[0]) - 10
 
             for i in range(1, features_batch.shape[0]):
                 result[i-1] = perfect_model_single(features_batch[i], difficulty_batch[i])
@@ -93,7 +93,7 @@ class TestEvaluationWorks(unittest.TestCase):
             features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
             difficulty_batch = difficulty_batch.numpy()
 
-            result = np.zeros(features_batch.shape[0])
+            result = np.zeros(features_batch.shape[0]) - 10
 
             skipped = False
             for i in range(0, features_batch.shape[0]):
@@ -102,6 +102,18 @@ class TestEvaluationWorks(unittest.TestCase):
                     output = -10
                     skipped = True
                 result[i] = output
+
+            return torch.tensor(result)
+
+        # misaligned by 3 frames.
+        def very_misaligned_model(features_batch, difficulty_batch):
+            features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
+            difficulty_batch = difficulty_batch.numpy()
+
+            result = np.zeros(features_batch.shape[0]) - 10
+
+            for i in range(3, features_batch.shape[0]):
+                result[i-3] = perfect_model_single(features_batch[i], difficulty_batch[i])
 
             return torch.tensor(result)
             
@@ -113,6 +125,7 @@ class TestEvaluationWorks(unittest.TestCase):
         self.inverse_perfect_model = inverse_perfect_model
         self.near_perfect_model = near_perfect_model
         self.off_by_one_model = off_by_one_model
+        self.very_misaligned_model = very_misaligned_model
 
             
     def context_around(self, i):
@@ -162,12 +175,18 @@ class TestEvaluationWorks(unittest.TestCase):
         for i, chart in enumerate(self.charts):
             result = evaluation.measure_onset_performance(self.off_by_one_model, self.charts[i], self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
 
-            self.assertGreater(result.recall, 0.5, f'Recall for chart {i} must be above 0.5')
             self.assertGreater(result.precision, 0.99, f'Precision for chart {i} must be near 1')
 
             expected_recall = (len(chart.steps) - 1) / len(chart.steps)
 
-            self.assertLess(result.recall, expected_recall + 0.05, f'Recall for chart {i} must be too high')
+            self.assertAlmostEqual(result.recall,expected_recall, f'Recall for chart {i} must match expected', 0.05)
+
+    def test_very_misaligned_model_has_expected_metrics(self):
+        for i, chart in enumerate(self.charts):
+            result = evaluation.measure_onset_performance(self.very_misaligned_model, self.charts[i], self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+            self.assertLess(result.precision, 0.1, f'Precision for chart {i} must be near 0')
+
+
 
 
         
