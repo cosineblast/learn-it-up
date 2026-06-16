@@ -8,6 +8,8 @@ import evaluation
 from ssc_util import RefinedStepFile, RefinedChart, StepInfo
 from math import floor
 
+DEFAULT_VALUE = -1
+
 class TestEvaluationWorks(unittest.TestCase):
 
     def test_works(self):
@@ -45,7 +47,7 @@ class TestEvaluationWorks(unittest.TestCase):
         self.audio = audio
         audio_len = audio.shape[0]
 
-        padding = np.ones((7, 80, 3)) * loading.DEFAULT_VALUE
+        padding = np.ones((7, 80, 3)) * DEFAULT_VALUE
         padded_audio = np.concat([padding, audio, padding])
 
         audio_view = loading.FeatureView(padded_audio, 7, audio_len) 
@@ -121,7 +123,7 @@ class TestEvaluationWorks(unittest.TestCase):
 
         while k <= i+7:
             if k < 0 or k >= self.audio.shape[0]:
-                result[j] = loading.DEFAULT_VALUE
+                result[j] = DEFAULT_VALUE
             else:
                 result[j] = self.audio[k]
             k += 1

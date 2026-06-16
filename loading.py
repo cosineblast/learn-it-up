@@ -16,9 +16,6 @@ StepfileStats = namedtuple('StepfileStats', ['len_frames', 'chart_stats'])
 FeatureView =namedtuple('FeatureView', ['array', 'start', 'len'])
 
 
-# TODO: use default value as minimum value from features for each file, since
-# files have varying silences.
-DEFAULT_VALUE = np.log(1e-16)
 CONTEXT_RADIUS=7
 
 class LoadFeaturesCached():

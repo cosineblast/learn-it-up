@@ -4,6 +4,8 @@ import numpy as np
 import loading
 from ssc_util import RefinedStepFile, RefinedChart, StepInfo
 
+DEFAULT_VALUE = -1
+
 class TestCNNDataset(unittest.TestCase):
 
     def setUp(self):
@@ -60,7 +62,7 @@ class TestCNNDataset(unittest.TestCase):
         self.audio = audio
         audio_len = audio.shape[0]
 
-        padding = np.ones((7, 3)) * loading.DEFAULT_VALUE
+        padding = np.ones((7, 3)) * DEFAULT_VALUE
         padded_audio = np.concat([padding, audio, padding])
 
         def load_audio(path):
@@ -78,7 +80,7 @@ class TestCNNDataset(unittest.TestCase):
 
         while k <= i+7:
             if k < 0 or k >= self.audio.shape[0]:
-                result[j] = loading.DEFAULT_VALUE
+                result[j] = DEFAULT_VALUE
             else:
                 result[j] = self.audio[k]
             k += 1

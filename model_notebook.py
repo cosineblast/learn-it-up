@@ -185,7 +185,7 @@ def _(
 
 @app.cell
 def _(train_epochs):
-    metrics = train_epochs(100)
+    metrics = train_epochs(1)
     return
 
 
