@@ -46,9 +46,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.len_frames
 
-    def __init__(self, stepfiles, paths, audio_loader, transform_x=(lambda x:x), transform_y=(lambda y:y)):
-        all_features = [audio_loader(get_feature_path_for(path)) for path in paths]
-
+    def __init__(self, stepfiles, all_features, transform_x=(lambda x:x), transform_y=(lambda y:y)):
         def get_chart_stats(chart, features):
             first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
             last_frame_index = floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
@@ -180,6 +178,3 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         return self.transform_x((frames, difficulty)), self.transform_y(is_step)
 
-def get_feature_path_for(refined_stepfile_path):
-    assert str(refined_stepfile_path).endswith(".ssc.bin")
-    return Path("data/features") / (Path(Path(refined_stepfile_path).stem).stem + ".feat.bin")

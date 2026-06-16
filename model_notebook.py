@@ -51,28 +51,40 @@ def _(pickle, test_paths, training_paths, validation_paths):
 
 
 @app.cell
-def _(loading):
+def _(loading, test_paths, training_paths, validation_paths):
+    # Loading audio features
+
+    from pathlib import Path
+
+    def _get_feature_path_for(refined_stepfile_path):
+        assert str(refined_stepfile_path).endswith(".ssc.bin")
+        return Path("data/features") / (Path(Path(refined_stepfile_path).stem).stem + ".feat.bin")
+
     audio_loader = loading.LoadFeaturesCached()
-    return (audio_loader,)
+
+    training_features = [audio_loader(_get_feature_path_for(path)) for path in training_paths]
+    validation_features = [audio_loader(_get_feature_path_for(path)) for path in validation_paths]
+    test_features = [audio_loader(_get_feature_path_for(path)) for path in test_paths]
+    return test_features, training_features, validation_features
 
 
 @app.cell
-def _(audio_loader, loading, training_paths, training_stepfiles):
-    training_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(training_stepfiles, training_paths, audio_loader)
+def _(loading, training_features, training_stepfiles):
+    training_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(training_stepfiles, training_features)
     len(training_dataset)
     return (training_dataset,)
 
 
 @app.cell
-def _(audio_loader, loading, test_paths, test_stepfiles):
-    testing_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(test_stepfiles, test_paths, audio_loader)
+def _(loading, test_features, test_stepfiles):
+    testing_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(test_stepfiles, test_features)
     len(testing_dataset)
     return
 
 
 @app.cell
-def _(audio_loader, loading, validation_paths, validation_stepfiles):
-    validation_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(validation_stepfiles, validation_paths, audio_loader)
+def _(loading, validation_features, validation_stepfiles):
+    validation_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(validation_stepfiles, validation_features)
     len(validation_dataset)
     return (validation_dataset,)
 
@@ -83,7 +95,7 @@ def _(DataLoader, training_dataset, validation_dataset):
 
     training_loader =  DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
-    return BATCH_SIZE, training_loader, validation_loader
+    return BATCH_SIZE, training_loader
 
 
 @app.cell
@@ -142,7 +154,7 @@ def _(
                     bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
 
-    return ceil, train_epoch
+    return (train_epoch,)
 
 
 @app.cell
@@ -152,7 +164,7 @@ def _(
     np,
     torch,
     train_epoch,
-    training_paths,
+    training_features,
     training_stepfiles,
 ):
     def train_epochs(epochs):
@@ -171,7 +183,7 @@ def _(
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
             if epoch % 10 == 0:
-                result = evaluate_validation_per_chart(training_stepfiles, training_paths)
+                result = evaluate_validation_per_chart(training_stepfiles, training_features)
                 training_losses.append(result)
                 print(f'epoch {epoch+1}/{epochs}. training evaluation={result}')
 
@@ -191,84 +203,20 @@ def _(train_epochs):
 
 @app.cell
 def _(
-    BATCH_SIZE,
-    ceil,
-    cnn_model,
-    device,
-    loss_fn,
-    mo,
-    torch,
-    validation_dataset,
-    validation_loader,
-):
-    def evaluate_validation_overall():
-        cnn_model.eval()
-
-        size = ceil(len(validation_dataset) / BATCH_SIZE)
-
-        loss_mean = torch.tensor(0.0).to(device)
-        batch_count = 0
-
-        total_positives = 0.0
-        total_label_positives = 0.0
-        total_true_positives = 0.0
-
-        with mo.status.progress_bar(total=size, title='Validating...', remove_on_exit=True) as bar:
-            with torch.no_grad():
-                for batch, ((frames, difficulties), y) in enumerate(validation_loader):
-                    # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
-                    frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
-                    difficulties = difficulties.float().to(device)
-                    y = y.float().to(device)
-
-                    pred = cnn_model(frames, difficulties)
-
-                    loss = loss_fn(pred, y)
-
-                    loss_mean += torch.mean(loss)
-
-                    positives = y == 1.0
-                    label_positives = pred > 0.5
-                    true_positives = positives & label_positives
-
-                    total_positives += torch.sum(positives)
-                    total_label_positives += torch.sum(label_positives)
-                    total_true_positives += torch.sum(true_positives)
-
-                    if batch % 100 == 0:
-                        bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
-
-                    batch_count += 1 
-
-        precision = 0.0 if total_label_positives == 0 else total_true_positives / total_label_positives
-        recall = total_true_positives / total_positives
-
-        return (loss_mean / batch_count, precision, recall)
-
-
-
-
-    return
-
-
-@app.cell
-def _(
-    audio_loader,
     cnn_model,
     device,
     evaluation,
-    get_feature_path_for,
     loss_fn,
     mo,
     namedtuple,
-    validation_paths,
+    validation_features,
     validation_stepfiles,
 ):
     FullEvaluation = namedtuple('FullEvaluation', 
                                 ['avg_precision',  'avg_recall', 'avg_fscore', 
                                  'avg_loss', 'avg_raw_auc_score', 'avg_aligned_auc_score', 'avg_accuracy'])
 
-    def evaluate_validation_per_chart(stepfiles=validation_stepfiles, paths=validation_paths):
+    def evaluate_validation_per_chart(stepfiles=validation_stepfiles, file_features=validation_features):
         chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
 
         sum_precision = 0
@@ -282,8 +230,7 @@ def _(
         sum_accuracy = 0
 
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
-            for stepfile, path in zip(stepfiles, paths):
-                features = audio_loader(get_feature_path_for(path))
+            for stepfile, features in zip(stepfiles, file_features):
 
                 for chart in stepfile.charts:
                     result = evaluation.measure_onset_performance(cnn_model, chart, features, loss_fn, device)
@@ -344,8 +291,8 @@ def _(cnn_difficulty_data, cnn_model, cnn_sample_data):
 
 @app.cell
 def _(models):
-    full_model = models.PumpItUpConvolutionOnset()
-    return (full_model,)
+    onset_lstm_model = models.PumpItUpConvolutionOnset()
+    return (onset_lstm_model,)
 
 
 @app.cell
@@ -363,8 +310,34 @@ def _(F, torch):
 
 
 @app.cell
-def _(full_difficulty_data, full_model, full_model_data):
-    full_model(full_model_data, full_difficulty_data)
+def _(full_difficulty_data, full_model_data, onset_lstm_model):
+    onset_lstm_model(full_model_data, full_difficulty_data)
+    return
+
+
+@app.cell
+def _(models):
+    selection_model = models.PumpItUpConvolutionSelectionLSTM()
+    return (selection_model,)
+
+
+@app.cell
+def _(device, np, torch):
+    step_data = torch.tensor(np.random.rand(20, 10, 5, 4) > 0.5).float().to(device)
+    step_data.shape
+    return (step_data,)
+
+
+@app.cell
+def _(device, np, torch):
+    delta_time_data = torch.tensor(np.random.rand(20, 10, 2)).float().to(device)
+    delta_time_data.shape
+    return (delta_time_data,)
+
+
+@app.cell
+def _(delta_time_data, selection_model, step_data):
+    selection_model(step_data, delta_time_data)
     return
 
 
@@ -373,11 +346,6 @@ def _(mo):
     mo.md("""
     # Appendix
     """)
-    return
-
-
-@app.cell
-def _():
     return
 
 
@@ -395,8 +363,10 @@ def _():
     import json
     import evaluation
     from collections import namedtuple
+    from torch.utils.data import DataLoader
 
     return (
+        DataLoader,
         F,
         evaluation,
         json,
@@ -409,25 +379,6 @@ def _():
         pickle,
         torch,
     )
-
-
-@app.cell
-def _():
-    from pathlib import Path
-
-    def get_feature_path_for(refined_stepfile_path):
-        assert str(refined_stepfile_path).endswith(".ssc.bin")
-        return Path("data/features") / (Path(Path(refined_stepfile_path).stem).stem + ".feat.bin")
-
-
-    return (get_feature_path_for,)
-
-
-@app.cell
-def _():
-    from torch.utils.data import DataLoader
-
-    return (DataLoader,)
 
 
 if __name__ == "__main__":
