@@ -169,3 +169,74 @@ class PumpItUpConvolutionOnset(nn.Module):
         # Batch x UnrollLength
         return linear_result
 
+
+class PumpItUpConvolutionSelectionLSTM(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        # Input: 
+        # - X: (Batch x UnrollLength x 5 x 4) tensor with the bag-of-arrows representation of the steps
+        # - DeltaTime: (Batch x UnrollLength x 2) value representing the amout of time (seconds?) since the last step, and whether it is the first step
+        # Where:
+        # - 5 is the number of steps of the game (down left, up left, center, up right, down right)
+        # - 4 is the one-hot for the arrow (disabled, step, start hold, end hold)
+        # Output: (Batch x UnrollLength x 4^5) tensor containing the pre-softmax scores for the next step to be placed
+
+        rnn_size = 128
+        unroll_length = 100
+
+        # self.rnn_size = rnn_size
+        
+        self.rnn_projection = nn.Linear(
+            in_features=5*4 + 2,
+            out_features=rnn_size,
+        )
+
+        self.lstm = nn.LSTM(
+            input_size=rnn_size,
+            hidden_size=rnn_size,
+            num_layers=2,
+            batch_first=True,
+            dropout=0.5
+        )
+
+        self.out_projection = nn.Sequential(
+            nn.Linear(
+                in_features=rnn_size,
+                out_features=4**5
+            )
+        )
+
+    def forward(self, x, delta):
+        batch = x.shape[0]
+        unroll = x.shape[1]
+        assert x.shape[2] == 5
+        assert x.shape[3] == 4
+
+        assert delta.shape[0] == batch
+        assert delta.shape[1] == unroll
+        assert delta.shape[2] == 2
+
+        # Batch x Unroll x 5 x 4
+        flattened_x = torch.flatten(x, start_dim=2)
+
+        # X: Batch x Unroll x 20
+        # Diff: Batch x Unroll x 2
+        concated = torch.concat([flattened_x, delta], dim=2)
+
+        # Batch x Unroll x 22
+        projected = self.rnn_projection(concated)
+
+        # Batch x Unroll x RNNSize
+        after_lstm, _ = self.lstm(projected)
+
+        # Batch x Unroll x RNNSize
+        _after_lstm = torch.flatten(after_lstm, start_dim=0, end_dim=1)
+        # (Batch * Unroll) x RNNSize
+        _final_layer = self.out_projection(_after_lstm)
+        # (Batch * Unroll) x 4^5
+        final_layer = torch.unflatten(_final_layer, 0, (batch, unroll)) 
+
+        # Batch x Unroll x 4^5
+        return final_layer
+        
