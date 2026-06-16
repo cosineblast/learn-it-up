@@ -36,7 +36,8 @@ class LoadFeaturesCached():
             if self.normalize_features:
                 features = (features - np.mean(features, axis=0)) / np.std(features, axis=0)
 
-            padding = np.ones((CONTEXT_RADIUS, 80, 3)) * DEFAULT_VALUE
+            default_value = np.min(features, axis=0)
+            padding = np.tile(default_value.reshape((1, 80, 3)), (CONTEXT_RADIUS, 1, 1))
             padded = np.concat([padding, features, padding])
             view = FeatureView(padded, CONTEXT_RADIUS, features.shape[0])
 
