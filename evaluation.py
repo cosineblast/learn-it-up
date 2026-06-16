@@ -17,7 +17,9 @@ import sklearn
 
 from collections import namedtuple, defaultdict
 
-Evaluation = namedtuple('Evaluation', [
+import loading
+
+OnsetEvaluation = namedtuple('Evaluation', [
                         'precision',
                         'recall',
                         'fscore',
@@ -82,7 +84,7 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     y_labels[predicted_steps] = 1
     accuracy = sklearn.metrics.accuracy_score(ys.astype(int), y_labels)
 
-    return Evaluation(precision, recall, fscore, mean_loss, threshold_ideal, raw_auc_score, aligned_auc_score, accuracy)
+    return OnsetEvaluation(precision, recall, fscore, mean_loss, threshold_ideal, raw_auc_score, aligned_auc_score, accuracy)
 
 def get_best_metrics(precisions, recalls, thresholds):
     fscores_denom = precisions + recalls
@@ -175,7 +177,37 @@ def _get_all_song_context_features(features_view, first_frame, last_frame):
 
     return frame_features
 
-    
+StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy'])
+
+def measure_selection_performance(model, chart, loss_fn, device):
+
+    x, delta, y = loading.steps_to_model_input(chart.steps, 0, len(chart.steps))
+
+    real_y = y
+
+    x = np.stack([x])
+    delta = np.stack([delta])
+    y = np.stack([y])
+
+    # running the model
+    with torch.no_grad():
+        x = torch.tensor(x).float().to(device)
+        delta = torch.tensor(delta).float().to(device)
+        y = torch.tensor(y).to(device)
+
+        log_scores = model(x, delta)
+
+        log_scores = torch.flatten(log_scores,start_dim=0, end_dim=1)
+        y = torch.flatten(y)
+
+        predictions = torch.argmax(F.softmax(log_scores), dim=1).detach().cpu().numpy()
+        mean_loss = torch.mean(loss_fn(log_scores, y)).detach().cpu().numpy()
+
+    # computing main metrics 
+
+    accuracy = sklearn.metrics.accuracy_score(real_y, predictions)
+
+    return StepEvaluation(mean_loss, accuracy)    
 
     
 

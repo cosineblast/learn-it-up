@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import pickle
 
+import random
 
 from pathlib import Path
 
@@ -178,3 +179,132 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         return self.transform_x((frames, difficulty)), self.transform_y(is_step)
 
+class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
+
+    def __init__(self, stepfiles, unroll_length, transform=(lambda x:x)):
+        # original ddc todo: "first sequence incredibly unlikely to appear, balance this"
+        # we solve this by sampling all blocks in an epoch. although this makes so that blocks
+        # will always be aligned by 100 steps to the start of the song, this means every block
+        # gets accessed once per epoch
+
+        charts = [chart for stepfile in stepfiles for chart in stepfile.charts]
+        chart_step_counts = [len(chart.steps) for chart in charts]
+        chart_block_counts = [length // unroll_length + int(length % unroll_length != 0) for length in chart_step_counts]
+
+        len_blocks = sum(chart_block_counts) 
+
+        self.unroll_length = unroll_length
+        self.len_blocks = len_blocks
+        self.charts = charts
+        self.stepfiles = stepfiles
+        self.chart_block_counts = chart_block_counts
+        self.chart_block_counts_sum = list(itertools.accumulate(chart_block_counts))
+        self.transform = transform
+
+    def __len__(self):
+        return self.len_blocks
+
+    def _get_target_chart_index(self, target_index):
+        if target_index < self.chart_block_counts_sum[0]:
+            return 0, 0
+
+        l = 0
+        r = len(self.chart_block_counts_sum)-1
+
+        assert not (target_index < self.chart_block_counts_sum[l])
+        assert target_index < self.chart_block_counts_sum[r]
+
+        while l+1 != r:
+            m = (l + r) // 2
+
+            if target_index < self.chart_block_counts_sum[m]:
+                r = m
+            else:
+                l = m
+
+        assert not (target_index < self.chart_block_counts_sum[l])
+        assert target_index < self.chart_block_counts_sum[r]
+
+        return r, self.chart_block_counts_sum[l]
+
+    def __getitem__(self, target_index):
+        assert isinstance(target_index, int)
+        assert target_index < len(self)
+
+        chart_index, total_before_chart = self._get_target_chart_index(target_index)
+
+        chart = self.charts[chart_index]
+
+        block_index = target_index - total_before_chart
+
+        start_index = block_index * self.unroll_length
+        end_index =  (block_index + 1) * self.unroll_length
+        block = chart.steps[start_index : end_index]
+
+        # block length may be shorter than unroll_length
+        end_index = start_index + len(block)
+
+        return self.transform(steps_to_model_input(chart.steps, start_index, end_index))
+
+def steps_to_model_input(steps, start_index, end_index):
+    x = np.stack([
+        np.zeros((5, 4)) if i == 0 else
+        stepcode_to_bag_tensor(steps[i-1].stepcode)
+        for i in range(start_index, end_index)
+    ])
+
+    delta = np.stack([
+        np.array([0.0, 1.0]) if i == 0 else
+        (steps[i].time_in_seconds - steps[i-1].time_in_seconds) * np.array([1.0, 0.0])
+        for i in range(start_index, end_index)
+    ])
+
+    y = np.stack([
+        stepcode_to_onehot_tensor(steps[i].stepcode)
+        for i in range(start_index, end_index)
+    ])
+
+    return x, delta, y
+
+_bag_of_arrows_cache = {}
+def stepcode_to_bag_tensor(stepcode):
+    if stepcode in _bag_of_arrows_cache:
+        return _bag_of_arrows_cache[stepcode]
+
+    result = np.zeros((5, 4))
+
+    for i, char in enumerate(stepcode):
+        result[i, int(char)] = 1.0
+
+    _bag_of_arrows_cache[stepcode] = result
+    return result
+
+_onehot_cache = {}
+def stepcode_to_onehot_tensor(_stepcode):
+    if _stepcode in _onehot_cache:
+        return _onehot_cache[_stepcode]
+
+    stepcode = list(map(int, _stepcode))
+
+    index = stepcode[0] + 4*stepcode[1] + 16* stepcode[2] + 64 * stepcode[3] + 256* stepcode[4]
+
+    _onehot_cache[_stepcode] = index
+
+    return index
+
+def MaskAndPaddingTransform(unroll_length):
+    def maskAndPad(data):
+        x, delta, y = data
+
+        size    = x.shape[0]
+        padding = unroll_length - size
+
+        x       = np.pad(x, [(0, padding), (0, 0), (0, 0)])
+        delta   = np.pad(delta, [(0, padding), (0, 0)])
+        y       = np.pad(y, [(0, padding)])
+
+        mask = np.pad(np.ones(size), (0, padding))
+
+        return x, delta, y, mask
+
+    return maskAndPad  
