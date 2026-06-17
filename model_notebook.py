@@ -182,14 +182,15 @@ def _(
             print()
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
+            if result.avg_aligned_auc_score > best_score:
+                torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
+                best_score = result.avg_aligned_auc_score
+
             if epoch % 10 == 0:
                 result = evaluate_validation_per_chart(training_stepfiles, training_features)
                 training_losses.append(result)
                 print(f'epoch {epoch+1}/{epochs}. training evaluation={result}')
 
-            if result.avg_aligned_auc_score > best_score:
-                torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
-                best_score = result.avg_aligned_auc_score
         return losses, training_losses
 
     return (train_epochs,)
