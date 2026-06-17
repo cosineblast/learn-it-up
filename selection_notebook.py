@@ -234,6 +234,12 @@ def _(evaluate_validation_per_chart):
     return
 
 
+@app.cell
+def _(selection_model, torch):
+    torch.save(selection_model, 'selection_model.pth')
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""

@@ -37,7 +37,7 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     first_frame = frame_of(chart.steps[0])
     last_frame = frame_of(chart.steps[-1])
 
-    frame_features = _get_all_song_context_features(features, first_frame, last_frame)
+    frame_features = loading.get_all_song_context_features(features, first_frame, last_frame)
 
     difficulties = np.zeros(25)
     difficulties[chart.difficulty-1] = 1.0
@@ -163,19 +163,6 @@ def _compute_true_positives(pred_onsets, real_onsets):
 
 def frame_of(step):
     return floor(step.time_in_seconds * FRAMES_PER_SECOND)
-
-def _get_all_song_context_features(features_view, first_frame, last_frame):
-    """Returns a list with all the 15-frame context windows of the given feature view"""
-    features, start, length = features_view
-
-    frame_indices = start + np.arange(first_frame,last_frame+1)
-    total_frames = frame_indices.shape[0]
-
-    context_indices = np.tile(np.arange(-7, 8), (total_frames, 1)).transpose((1,0)) + frame_indices
-    context_indices = context_indices.transpose((1, 0))
-    frame_features = features[context_indices]
-
-    return frame_features
 
 StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy'])
 

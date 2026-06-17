@@ -210,7 +210,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
             )
         )
 
-    def forward(self, x, delta):
+    def forward(self, x, delta, initial_state=None, return_state=False):
         batch = x.shape[0]
         unroll = x.shape[1]
         assert x.shape[2] == 5
@@ -231,7 +231,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
         projected = self.rnn_projection(concated)
 
         # Batch x Unroll x RNNSize
-        after_lstm, _ = self.lstm(projected)
+        after_lstm, state = self.lstm(projected, initial_state)
 
         # Batch x Unroll x RNNSize
         _after_lstm = torch.flatten(after_lstm, start_dim=0, end_dim=1)
@@ -240,6 +240,9 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
         # (Batch * Unroll) x 4^5
         final_layer = torch.unflatten(_final_layer, 0, (batch, unroll)) 
 
-        # Batch x Unroll x 4^5
-        return final_layer
+        if return_state:
+            # Batch x Unroll x 4^5
+            return final_layer, state
+        else:
+            return final_layer
         

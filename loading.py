@@ -20,6 +20,9 @@ FeatureView =namedtuple('FeatureView', ['array', 'start', 'len'])
 CONTEXT_RADIUS=7
 
 class LoadFeaturesCached():
+    """
+    Loads features from disk applying padding and caching on paths.
+    """
     def __init__(self, normalize_features=True):
         self.cache = {}
         self.normalize_features = normalize_features
@@ -31,16 +34,42 @@ class LoadFeaturesCached():
         with open(path, 'rb') as f:
             features = pickle.load(f)
 
-            if self.normalize_features:
-                features = (features - np.mean(features, axis=0)) / np.std(features, axis=0)
-
-            default_value = np.min(features, axis=0)
-            padding = np.tile(default_value.reshape((1, 80, 3)), (CONTEXT_RADIUS, 1, 1))
-            padded = np.concat([padding, features, padding])
-            view = FeatureView(padded, CONTEXT_RADIUS, features.shape[0])
+            view = prepare_features(features, normalize=self.normalize_features)
 
             self.cache[path] = view
+
             return view
+
+def prepare_features(features, normalize=True):
+    """Adds 7 frames of padding before and after the feature, padded with minimum values of features,
+       and normalizes features to mean 0 and standard deviation 1.
+       Returns a feature view of the non-padded features. 
+       """
+
+    if normalize:
+        features = (features - np.mean(features, axis=0)) / np.std(features, axis=0)
+
+    default_value = np.min(features, axis=0)
+    padding = np.tile(default_value.reshape((1, 80, 3)), (CONTEXT_RADIUS, 1, 1))
+    padded = np.concat([padding, features, padding])
+
+    return FeatureView(padded, CONTEXT_RADIUS, features.shape[0])
+
+def get_all_song_context_features(features_view, first_frame, last_frame):
+    """Returns a list with all the 15-frame context windows of the given feature view,
+       within the given inclusive frame range"""
+
+    features, start, length = features_view
+
+    frame_indices = start + np.arange(first_frame,last_frame+1)
+    total_frames = frame_indices.shape[0]
+
+    context_indices = np.tile(np.arange(-7, 8), (total_frames, 1)).transpose((1,0)) + frame_indices
+    context_indices = context_indices.transpose((1, 0))
+    frame_features = features[context_indices]
+
+    return frame_features
+
 
 class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
@@ -291,6 +320,15 @@ def stepcode_to_onehot_tensor(_stepcode):
     _onehot_cache[_stepcode] = index
 
     return index
+
+def index_to_stepcode(index):
+    stepcode = [0, 0, 0, 0, 0]
+    stepcode[0] = index % 4
+    stepcode[1] = (index // 4) % 4
+    stepcode[2] = (index // 16) % 4
+    stepcode[3] = (index // 64) % 4
+    stepcode[4] = (index // 256) % 4
+    return ''.join(map(str, stepcode))
 
 def MaskAndPaddingTransform(unroll_length):
     def maskAndPad(data):

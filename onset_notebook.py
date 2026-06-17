@@ -257,6 +257,12 @@ def _(
 
 
 @app.cell
+def _(torch):
+    torch.load("selection_model.pth", weights_only=False)
+    return
+
+
+@app.cell
 def _(evaluate_validation_per_chart):
     evaluate_validation_per_chart()
     return
