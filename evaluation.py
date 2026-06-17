@@ -200,7 +200,7 @@ def measure_selection_performance(model, chart, loss_fn, device):
         log_scores = torch.flatten(log_scores,start_dim=0, end_dim=1)
         y = torch.flatten(y)
 
-        predictions = torch.argmax(F.softmax(log_scores), dim=1).detach().cpu().numpy()
+        predictions = torch.argmax(F.softmax(log_scores, dim=1), dim=1).detach().cpu().numpy()
         mean_loss = torch.mean(loss_fn(log_scores, y)).detach().cpu().numpy()
 
     # computing main metrics 

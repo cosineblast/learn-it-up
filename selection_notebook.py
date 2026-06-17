@@ -95,6 +95,8 @@ def _(device, models):
 
 @app.cell
 def _(nn, selection_model, torch):
+    # reduction=none is because we want the loss funciton to spit the loss for each element of the input sequence, 
+    # so we can apply the mask
     loss_fn = nn.CrossEntropyLoss(reduction='none')
     optimizer = torch.optim.Adam(selection_model.parameters(), lr=0.001, weight_decay=1e-4)
     return loss_fn, optimizer
@@ -123,7 +125,7 @@ def _(
 
             for batch, (x, deltas, y, mask) in enumerate(training_loader):
                 batch_size = x.shape[0]
-            
+
                 x = x.float().to(device)
                 deltas = deltas.float().to(device)
                 mask = mask.float().to(device)
