@@ -53,8 +53,6 @@ class TestCNNDataset(unittest.TestCase):
             ]),
             ]
 
-        paths = ['idk.ssc.bin', 'idk2.ssc.bin']
-
         # 5 seconds of audio features
         audio = np.zeros((3, 500)) + np.arange(500)
         audio = audio.transpose(1, 0)
@@ -65,10 +63,9 @@ class TestCNNDataset(unittest.TestCase):
         padding = np.ones((7, 3)) * DEFAULT_VALUE
         padded_audio = np.concat([padding, audio, padding])
 
-        def load_audio(path):
-            return loading.FeatureView(padded_audio, 7, audio_len)
+        padded_audio_view = loading.FeatureView(padded_audio, 7, audio_len)
 
-        dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, paths, load_audio)
+        dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view])
 
         self.dataset = dataset
 
