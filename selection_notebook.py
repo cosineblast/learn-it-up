@@ -7,16 +7,17 @@ app = marimo.App(width="medium")
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    # Training DDC selection models
+    # Training Learn it Up DDC selection models
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(torch):
-    print('HasCuda:', torch.cuda.is_available())
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    return (device,)
+def _(mo):
+    mo.md("""
+    ## Loading dataset
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -73,22 +74,15 @@ def _(UNROLL, loading, test_stepfiles):
 
 
 @app.cell
-def _(UNROLL, loading, validation_stepfiles):
-    validation_dataset = loading.PumpItUpConvolutionSelectionLSTMDataset(validation_stepfiles, unroll_length=UNROLL)
-    len(validation_dataset)
-    return (validation_dataset,)
-
-
-@app.cell
-def _(BATCH_SIZE, DataLoader, training_dataset, validation_dataset):
+def _(BATCH_SIZE, DataLoader, training_dataset):
     training_loader =  DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
     return (training_loader,)
 
 
 @app.cell
 def _(device, models):
-    selection_model = models.PumpItUpConvolutionSelectionLSTM().float().to(device)
+    Model = models.PumpItUpConvolutionSelectionLSTM 
+    selection_model = Model().float().to(device)
     selection_model
     return (selection_model,)
 
@@ -96,7 +90,7 @@ def _(device, models):
 @app.cell
 def _(nn, selection_model, torch):
     # reduction=none is because we want the loss funciton to spit the loss for each element of the input sequence, 
-    # so we can apply the mask
+    # so we can apply the mask due to shorter sequences
     loss_fn = nn.CrossEntropyLoss(reduction='none')
     optimizer = torch.optim.Adam(selection_model.parameters(), lr=0.001, weight_decay=1e-4)
     return loss_fn, optimizer
@@ -152,16 +146,12 @@ def _(
 
 
 @app.cell
-def _(train_epoch):
-    train_epoch()
-    return
-
-
-@app.cell
 def _(
-    cnn_model,
     evaluate_validation_per_chart,
     np,
+    selection_model,
+    should_save_models,
+    should_validate_training,
     torch,
     train_epoch,
     training_stepfiles,
@@ -181,16 +171,50 @@ def _(
             print()
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
-            if epoch % 10 == 0:
+            if result.avg_accuracy > best_score and should_save_models.value:
+                torch.save(selection_model.state_dict(), f'selection_model_{epoch+1}.pth')
+                best_score = result.avg_accuracy
+            
+            if epoch % 10 == 0 and should_validate_training.value:
                 result = evaluate_validation_per_chart(training_stepfiles)
                 training_losses.append(result)
                 print(f'epoch {epoch+1}/{epochs}. training evaluation={result}')
 
-            if result.avg_aligned_auc_score > best_score:
-                torch.save(cnn_model.state_dict(), f'selection_model_{epoch}.pth')
-                best_score = result.avg_aligned_auc_score
         return losses, training_losses
 
+    return (train_epochs,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    should_train = mo.ui.run_button(label='Run')
+    should_save_models = mo.ui.checkbox(label='Save best models')
+    should_validate_training = mo.ui.checkbox(label='Validate models in training set sometimes')
+
+    epoch_count = mo.ui.number()
+
+    mo.center(
+        mo.vstack([
+            mo.md('Train epochs'),
+            epoch_count,
+            should_save_models,
+            should_validate_training,
+            should_train    
+        ])
+    )
+
+    return (
+        epoch_count,
+        should_save_models,
+        should_train,
+        should_validate_training,
+    )
+
+
+@app.cell(hide_code=True)
+def _(epoch_count, should_train, train_epochs):
+    if should_train.value:
+        train_epochs(epoch_count.value)
     return
 
 
@@ -230,15 +254,34 @@ def _(
     return (evaluate_validation_per_chart,)
 
 
-@app.cell
-def _(evaluate_validation_per_chart):
-    evaluate_validation_per_chart()
-    return
+@app.cell(hide_code=True)
+def _(mo):
+    should_evaluate = mo.ui.run_button(label='Evaluate model')
+    should_evaluate
+
+    should_save = mo.ui.run_button(label='Save model')
+
+    mo.center(
+    mo.vstack([should_evaluate, should_save])
+    )
+    return should_evaluate, should_save
 
 
-@app.cell
-def _(selection_model, torch):
-    torch.save(selection_model, 'selection_model.pth')
+@app.cell(hide_code=True)
+def _(
+    evaluate_validation_per_chart,
+    selection_model,
+    should_evaluate,
+    should_save,
+    torch,
+):
+    if should_evaluate.value:
+        evaluate_validation_per_chart()
+
+    if should_save.value:
+        _path = 'selection_model.pth' 
+        torch.save(selection_model, _path)
+        print('Saved model to', _path)
     return
 
 
@@ -313,6 +356,13 @@ def _():
         pickle,
         torch,
     )
+
+
+@app.cell(hide_code=True)
+def _(torch):
+    print('HasCuda:', torch.cuda.is_available())
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    return (device,)
 
 
 if __name__ == "__main__":
