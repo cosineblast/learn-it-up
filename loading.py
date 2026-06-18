@@ -289,7 +289,7 @@ def steps_to_model_input(steps, start_index, end_index):
     ])
 
     y = np.stack([
-        stepcode_to_onehot_tensor(steps[i].stepcode)
+        stepcode_to_index(steps[i].stepcode)
         for i in range(start_index, end_index)
     ])
 
@@ -308,16 +308,16 @@ def stepcode_to_bag_tensor(stepcode):
     _bag_of_arrows_cache[stepcode] = result
     return result
 
-_onehot_cache = {}
-def stepcode_to_onehot_tensor(_stepcode):
-    if _stepcode in _onehot_cache:
-        return _onehot_cache[_stepcode]
+_index_cache = {}
+def stepcode_to_index(_stepcode):
+    if _stepcode in _index_cache:
+        return _index_cache[_stepcode]
 
     stepcode = list(map(int, _stepcode))
 
     index = stepcode[0] + 4*stepcode[1] + 16* stepcode[2] + 64 * stepcode[3] + 256* stepcode[4]
 
-    _onehot_cache[_stepcode] = index
+    _index_cache[_stepcode] = index
 
     return index
 
