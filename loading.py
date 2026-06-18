@@ -276,17 +276,20 @@ class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
         return self.transform(steps_to_model_input(chart.steps, start_index, end_index))
 
 def steps_to_model_input(steps, start_index, end_index):
+    assert len(steps) >= 2
     x = np.stack([
         np.zeros((5, 4)) if i == 0 else
         stepcode_to_bag_tensor(steps[i-1].stepcode)
         for i in range(start_index, end_index)
     ])
 
-    delta = np.stack([
-        np.array([0.0, 1.0]) if i == 0 else
-        (steps[i].time_in_seconds - steps[i-1].time_in_seconds) * np.array([1.0, 0.0])
-        for i in range(start_index, end_index)
-    ])
+    def deltaof(i):
+        time_before = 0.0 if i == 0 else steps[i].time_in_seconds - steps[i-1].time_in_seconds
+        time_after = 0.0 if i == len(steps)-1 else steps[i+1].time_in_seconds - steps[i].time_in_seconds
+        is_first = float(i == 0)
+        return np.array([time_before, time_after, is_first])
+
+    delta = np.stack([deltaof(i) for i in range(start_index, end_index)])
 
     y = np.stack([
         stepcode_to_index(steps[i].stepcode)

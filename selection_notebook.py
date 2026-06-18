@@ -213,6 +213,8 @@ def _(
         sum_mean_loss = 0
         sum_accuracy = 0
 
+        selection_model.eval()
+
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
             for stepfile in stepfiles:
                 for chart in stepfile.charts:
@@ -263,7 +265,7 @@ def _(device, np, torch):
 
 @app.cell
 def _(device, np, torch):
-    delta_time_data = torch.tensor(np.random.rand(20, 10, 2)).float().to(device)
+    delta_time_data = torch.tensor(np.random.rand(20, 10, 3)).float().to(device)
     delta_time_data.shape
     return (delta_time_data,)
 

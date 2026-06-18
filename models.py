@@ -179,7 +179,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
 
         # Input: 
         # - X: (Batch x UnrollLength x 5 x 4) tensor with the bag-of-arrows representation of the steps
-        # - DeltaTime: (Batch x UnrollLength x 2) value representing the amout of time (seconds?) since the last step, and whether it is the first step
+        # - DeltaTime: (Batch x UnrollLength x 3) value representing the amout of time in seconds since the last and next step, and whether it is the first step or not
         # Where:
         # - 5 is the number of steps of the game (down left, up left, center, up right, down right)
         # - 4 is the one-hot for the arrow (disabled, step, start hold, end hold)
@@ -191,7 +191,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
         # self.rnn_size = rnn_size
         
         self.rnn_projection = nn.Linear(
-            in_features=5*4 + 2,
+            in_features=5*4 + 3,
             out_features=rnn_size,
         )
 
@@ -218,7 +218,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
 
         assert delta.shape[0] == batch
         assert delta.shape[1] == unroll
-        assert delta.shape[2] == 2
+        assert delta.shape[2] == 3
 
         # Batch x Unroll x 5 x 4
         flattened_x = torch.flatten(x, start_dim=2)
