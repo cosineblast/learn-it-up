@@ -173,8 +173,17 @@ class PumpItUpConvolutionOnset(nn.Module):
         return linear_result
 
 
+from dataclasses import dataclass
+
 class PumpItUpConvolutionSelectionLSTM(nn.Module):
-    def __init__(self):
+
+    @dataclass
+    class Settings:
+        rnn_size: int = 128
+        rnn_layers: int = 2
+        delta_features: int = 3
+        
+    def __init__(self, settings = Settings()):
         super().__init__()
 
         # Input: 
@@ -185,27 +194,22 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
         # - 4 is the one-hot for the arrow (disabled, step, start hold, end hold)
         # Output: (Batch x UnrollLength x 4^5) tensor containing the pre-softmax scores for the next step to be placed
 
-        rnn_size = 128
-        unroll_length = 100
-
-        # self.rnn_size = rnn_size
-        
         self.rnn_projection = nn.Linear(
-            in_features=5*4 + 3,
-            out_features=rnn_size,
+            in_features=5*4 + settings.delta_features,
+            out_features=settings.rnn_size,
         )
 
         self.lstm = nn.LSTM(
-            input_size=rnn_size,
-            hidden_size=rnn_size,
-            num_layers=2,
+            input_size=settings.rnn_size,
+            hidden_size=settings.rnn_size,
+            num_layers=settings.rnn_layers,
             batch_first=True,
             dropout=0.5
         )
 
         self.out_projection = nn.Sequential(
             nn.Linear(
-                in_features=rnn_size,
+                in_features=settings.rnn_size,
                 out_features=4**5
             )
         )
