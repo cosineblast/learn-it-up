@@ -6,6 +6,8 @@ import sys
 import itertools
 import time
 
+from pathlib import Path
+
 from collections import defaultdict
 
 FRAMES_PER_SECOND=100
@@ -93,21 +95,21 @@ def generate_stepfile(audio_path,
 
     steps = []
 
-    previous_placement = None
     previous_prediction = None
     previous_state = None
-    for placement in placements:
+    for i, placement in enumerate(placements):
 
-        delta = (np.array([0.0, 1.0])
-            if previous_placement is None
-            else np.array([placement - previous_placement, 0.0]))
-        
+        is_first = 1.0 if i == 0 else 0.0
+        time_before = 0.0 if i == 0 else placements[i] - placements[i-1]
+        time_after = 0.0 if i == len(placements)-1 else placements[i+1] - placements[i]
+        delta = np.array([time_before, time_after, is_first])
+
         x = (np.zeros((5, 4))
             if previous_prediction is None 
             else loading.stepcode_to_bag_tensor(loading.index_to_stepcode(previous_prediction)))
 
         x = x.reshape((1, 1, 5, 4))
-        delta = delta.reshape((1, 1, 2))
+        delta = delta.reshape((1, 1, 3))
 
         with torch.no_grad():
             #selection_model.eval()
@@ -122,7 +124,6 @@ def generate_stepfile(audio_path,
 
         steps.append(loading.index_to_stepcode(predictions[0]))
 
-        previous_placement = placement
         previous_state = state
         previous_prediction = predictions[0]
 
@@ -145,14 +146,16 @@ def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
     add('ARTISTTRANSLIT', '')
     add('GENRE', '')
     add('CREDIT', '')
-    add('MUSIC', audio_path)
+    add('MUSIC',
+        Path(audio_path).name if Path(audio_path).parent.absolute() == Path(result_path).parent.absolute()
+        else str(Path(audio_path).absolute()))
     add('BANNER', '')
     add('BACKGROUND', '')
     add('CDTITLE', '')
     add('SAMPLESTART', '0.000000')
     add('SAMPLELENGTH', '0.000000')
     add('SELECTABLE', 'YES')
-    add('OFFSET', '0.000000')
+    add('OFFSET', str(-placements[0]))
     add('BPMS', '0.000000=120.0000')
     add('STOPS', '')
     add('BGCHANGES', '')
@@ -184,7 +187,7 @@ def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
             f.write(str(attribute))
             f.write('\n')
 
-
+    print('Wrote to', result_path)
     
 
 # at 120BPM, a measure has two seconds
