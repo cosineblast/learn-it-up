@@ -18,22 +18,10 @@ def generate_stepfile(audio_path,
                       selection_model_path,
                       result_path):
 
-    # TODO: pass audio start and end offsets
-
-    if not re.match(r'S\d+', difficulty_str):
-        print('error: Invalid difficulty! Expecting diffculty of the form S1...S25')
-        sys.exit(1)
-
-
-    difficulty = int(difficulty_str[1:])
-
-    if not (1 <= difficulty <= 25):
-        print('error: Difficulty must be in 1..25 range')
-        sys.exit(1)
+    difficulty = check_difficulty(difficulty_str)
 
     print('Loading libraries... (let the bass kick)')
     import torch
-    import torch.nn.functional as F
     import audio_util
     import loading
     import scipy
@@ -43,8 +31,6 @@ def generate_stepfile(audio_path,
     print("Extracting audio features of {}... (JOOOOOOOO)".format(audio_path))
     loader = audio_util.AudioFeatureLoader(use_tqdm=True)
     features = loader.load(audio_path)
-            
-
     device = 'cpu'
 
     print("Loading onset model file {}... (AAAAE)".format(onset_model_path))
@@ -63,7 +49,22 @@ def generate_stepfile(audio_path,
 
     print('Running onset model... (JOOOOOOOOO)')
 
+    placements = run_onset_model(features, onset_model, difficulty, device)
 
+    # now run selection model
+    print('Running selection model... (AAE-O-A-A-U-U-A Eeeeeeee)')
+
+    steps = run_selection_model(placements, selection_model, device)
+
+    build_stepfile(placements, steps, audio_path, result_path, difficulty_str)
+
+def run_onset_model(features, onset_model, difficulty, device):
+    import torch
+    import numpy as np
+    import loading
+    import torch.nn.functional as F
+    import scipy
+    
     features = loading.prepare_features(features)
     frame_features = loading.get_all_song_context_features(features, 0, features.len-1)
 
@@ -88,11 +89,14 @@ def generate_stepfile(audio_path,
     maxima = scipy.signal.argrelextrema(onsets, np.greater_equal, order=1)[0]
     maxima = set(maxima)
 
-    placements = sorted(onset / FRAMES_PER_SECOND for onset in maxima if scores[onset] > threshold)
+    return sorted(onset / FRAMES_PER_SECOND for onset in maxima if scores[onset] > threshold)
 
-    # now run selection model
-    print('Running selection model... (AAE-O-A-A-U-U-A Eeeeeeee)')
-
+def run_selection_model(placements, selection_model, device):
+    import torch.nn.functional as F
+    import torch
+    import numpy as np
+    import loading
+    
     steps = []
 
     previous_prediction = None
@@ -127,7 +131,21 @@ def generate_stepfile(audio_path,
         previous_state = state
         previous_prediction = predictions[0]
 
-    build_stepfile(placements, steps, audio_path, result_path, difficulty_str)
+    return steps
+
+def check_difficulty(difficulty_str):
+    if not re.match(r'S\d+', difficulty_str):
+        print('error: Invalid difficulty! Expecting diffculty of the form S1...S25')
+        sys.exit(1)
+
+    difficulty = int(difficulty_str[1:])
+
+    if not (1 <= difficulty <= 25):
+        print('error: Difficulty must be in 1..25 range')
+        sys.exit(1)
+
+    return difficulty
+    
 
 def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
     import msdparser
