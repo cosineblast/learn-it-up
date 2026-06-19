@@ -1,2 +1,5 @@
-- Do not go insane
-- Use min as default value for out-of-song features instead of log(1e-16)
+- WRITE STUFF
+- Make website
+- Test vertical mirroring for charts below S18
+- Implement CNN-LSTM
+- Implement ConvLSTM
