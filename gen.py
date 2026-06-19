@@ -10,6 +10,9 @@ from pathlib import Path
 
 from collections import defaultdict
 
+import rich.progress
+from rich import print
+
 FRAMES_PER_SECOND=100
 
 def generate_stepfile(audio_path,
@@ -33,34 +36,53 @@ def generate_stepfile(audio_path,
     if seed is not None:
         torch.manual_seed(seed)
 
-    print("Extracting audio features of {}... (JOOOOOOOO)".format(audio_path))
-    loader = audio_util.AudioFeatureLoader(use_tqdm=True)
-    features = loader.load(audio_path)
+    print("Extracting audio features of [yellow]{}[/yellow]...".format(audio_path), joo1)
+    with rich.progress.Progress() as progress:
+        loader = audio_util.AudioFeatureLoader(use_tqdm=True)
+        features = loader.load(audio_path)
 
-    print("Loading onset model file {}... (AAAAE)".format(onset_model_path))
+    print("Loading onset model file {}...".format(onset_model_path), aae1)
     onset_model_state = torch.load(onset_model_path, weights_only=False, map_location=torch.device(device))
     onset_model = models.PumpItUpConvolutionCNNOnset()
     onset_model.load_state_dict(onset_model_state)
 
     print()
 
-    print("Loading selection model file {}... (A-A-I-A-U)".format(selection_model_path))
+    print("Loading selection model file {}...".format(selection_model_path), aaiau)
     selection_model_state = torch.load(selection_model_path, weights_only=False, map_location=torch.device(device))
     selection_model = models.PumpItUpConvolutionSelectionLSTM()
     selection_model.load_state_dict(selection_model_state)
 
     print()
 
-    print('Running onset model... (JOOOOOOOOO)')
+    print('Running onset model...', joo2)
 
-    placements = run_onset_model(features, onset_model, difficulty, device)
+    with rich.progress.Progress() as progress:
+        task = progress.add_task(ooo2, start=False, total=None)
+        placements = run_onset_model(features, onset_model, difficulty, device)
+
+    print('Generated', len(placements), 'steps', aae2+oaauua)
 
     # now run selection model
-    print('Running selection model... (AAE-O-A-A-U-U-A Eeeeeeee)')
+    print('Running selection model...', ee)
 
-    steps = run_selection_model(placements, selection_model, device)
+    with rich.progress.Progress() as progress:
+        task = progress.add_task(eeee, start=False, total=None)
+        steps = run_selection_model(placements, selection_model, device)
 
     build_stepfile(placements, steps, audio_path, result_path, difficulty_str)
+
+# Brain power lyrics
+joo1 = '([bold][red]JOOOOOOOO[/red][/bold])'
+ooo1 = '[bold][red]OOOOOOO[/red][/bold]'
+aae1 = '(AAAAE)'
+aaiau = '(A-A-I-A-U)'
+joo2 = '([bold][yellow]JOOOOOOOOO[/yellow][bold])'
+ooo2 = '[bold][yellow]OOOOOOO[/yellow][/bold]'
+aae2 = '([bold][purple]A[/purple][white]A[/white][green]E[/green]-'
+oaauua = '[purple]O[/purple]-[green]A[/green]-[red]A[/red]-[blue]U[/blue]-[yellow]U[/yellow]-[bright_magenta]A[/bright_magenta][/bold])'
+ee = '(Eeeee)'
+eeee = '[bold][green]E[/green][yellow]E[/yellow][bright_magenta]E[/bright_magenta][blue]E[/blue][red]E[/red][yellow]E[/yellow][green]E[/green][blue]E[/blue][/bold]'
 
 def run_onset_model(features, onset_model, difficulty, device):
     import torch

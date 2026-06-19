@@ -2,7 +2,8 @@ import essentia
 from essentia.standard import MonoLoader, FrameGenerator, Windowing, Spectrum, MelBands
 import numpy as np
 import functools
-from tqdm import tqdm
+
+import rich.progress
 
 
 class AudioFeatureLoader:
@@ -64,7 +65,7 @@ class AudioFeatureLoader:
         for window_size, pipeline in zip(self.window_sizes, self.pipelines):
             frames = FrameGenerator(samples, window_size, self.frame_hop)
 
-            frames = tqdm(frames, unit="frame") if self.use_tqdm else frames
+            frames = rich.progress.track(frames, description='[bold][red]OOOOOOO[/red][/bold]') if self.use_tqdm else frames
 
             feats = [_run_pipeline(pipeline, frame) for frame in frames]
             feature_channels.append(feats)
