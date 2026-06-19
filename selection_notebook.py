@@ -172,9 +172,9 @@ def _(
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
             if result.avg_accuracy > best_score and should_save_models.value:
-                torch.save(selection_model.state_dict(), f'selection_model_{epoch+1}.pth')
+                torch.save(selection_model.state_dict(), f'best_selection_model.pth')
                 best_score = result.avg_accuracy
-            
+
             if epoch % 10 == 0 and should_validate_training.value:
                 result = evaluate_validation_per_chart(training_stepfiles)
                 training_losses.append(result)
@@ -202,7 +202,6 @@ def _(mo):
             should_train    
         ])
     )
-
     return (
         epoch_count,
         should_save_models,
@@ -280,7 +279,7 @@ def _(
 
     if should_save.value:
         _path = 'selection_model.pth' 
-        torch.save(selection_model, _path)
+        torch.save(selection_model.state_dict(), _path)
         print('Saved model to', _path)
     return
 

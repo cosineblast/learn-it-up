@@ -7,16 +7,17 @@ app = marimo.App(width="medium")
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    # Training DDC models
+    # Training DDC onset models
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(torch):
-    print('HasCuda:', torch.cuda.is_available())
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    return (device,)
+def _(mo):
+    mo.md("""
+    ## Loading dataset
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -47,10 +48,10 @@ def _(pickle, test_paths, training_paths, validation_paths):
     training_stepfiles   = _get_stepfiles(training_paths)
     test_stepfiles       = _get_stepfiles(test_paths)
     validation_stepfiles = _get_stepfiles(validation_paths)
-    return test_stepfiles, training_stepfiles, validation_stepfiles
+    return training_stepfiles, validation_stepfiles
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(loading, test_paths, training_paths, validation_paths):
     # Loading audio features
 
@@ -65,7 +66,7 @@ def _(loading, test_paths, training_paths, validation_paths):
     training_features = [audio_loader(_get_feature_path_for(path)) for path in training_paths]
     validation_features = [audio_loader(_get_feature_path_for(path)) for path in validation_paths]
     test_features = [audio_loader(_get_feature_path_for(path)) for path in test_paths]
-    return test_features, training_features, validation_features
+    return training_features, validation_features
 
 
 @app.cell
@@ -76,25 +77,10 @@ def _(loading, training_features, training_stepfiles):
 
 
 @app.cell
-def _(loading, test_features, test_stepfiles):
-    testing_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(test_stepfiles, test_features)
-    len(testing_dataset)
-    return
-
-
-@app.cell
-def _(loading, validation_features, validation_stepfiles):
-    validation_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(validation_stepfiles, validation_features)
-    len(validation_dataset)
-    return (validation_dataset,)
-
-
-@app.cell
-def _(DataLoader, training_dataset, validation_dataset):
+def _(DataLoader, training_dataset):
     BATCH_SIZE = 256
 
-    training_loader =  DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
+    training_loader = DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
     return BATCH_SIZE, training_loader
 
 
@@ -162,6 +148,8 @@ def _(
     cnn_model,
     evaluate_validation_per_chart,
     np,
+    should_save_models,
+    should_validate_training,
     torch,
     train_epoch,
     training_features,
@@ -182,11 +170,11 @@ def _(
             print()
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
-            if result.avg_aligned_auc_score > best_score:
-                torch.save(cnn_model.state_dict(), f'cnn_model_{epoch}.pth')
+            if result.avg_aligned_auc_score > best_score and should_save_models.value:
+                torch.save(cnn_model.state_dict(), f'best_onset_model.pth')
                 best_score = result.avg_aligned_auc_score
 
-            if epoch % 10 == 0:
+            if epoch % 10 == 0 and should_validate_training.value:
                 result = evaluate_validation_per_chart(training_stepfiles, training_features)
                 training_losses.append(result)
                 print(f'epoch {epoch+1}/{epochs}. training evaluation={result}')
@@ -196,9 +184,35 @@ def _(
     return (train_epochs,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    epoch_count_input = mo.ui.number()
+    should_save_models = mo.ui.checkbox(label='Save best models')
+    should_validate_training = mo.ui.checkbox(label='Validate models in training set sometimes')
+    train_button = mo.ui.run_button(label='Train')
+
+
+    mo.center(
+        mo.vstack([
+            mo.md('Train epochs'),
+            epoch_count_input,
+            should_save_models,
+            should_validate_training,
+            train_button
+        ])
+    )
+    return (
+        epoch_count_input,
+        should_save_models,
+        should_validate_training,
+        train_button,
+    )
+
+
 @app.cell
-def _(train_epochs):
-    metrics = train_epochs(1)
+def _(epoch_count_input, train_button, train_epochs):
+    if train_button.value:
+        metrics = train_epochs(epoch_count_input.value)
     return
 
 
@@ -230,6 +244,8 @@ def _(
         sum_aligned_auc = 0
         sum_accuracy = 0
 
+        cnn_model.eval()
+
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
             for stepfile, features in zip(stepfiles, file_features):
 
@@ -256,15 +272,35 @@ def _(
     return (evaluate_validation_per_chart,)
 
 
-@app.cell
-def _(torch):
-    torch.load("selection_model.pth", weights_only=False)
-    return
+@app.cell(hide_code=True)
+def _(mo):
+    evaluate_button = mo.ui.run_button(label='Evaluate')
+    save_button = mo.ui.run_button(label='Save')
+
+    mo.center(
+        mo.vstack([
+            evaluate_button, 
+            save_button
+        ])
+    )
+    return evaluate_button, save_button
 
 
-@app.cell
-def _(evaluate_validation_per_chart):
-    evaluate_validation_per_chart()
+@app.cell(hide_code=True)
+def _(
+    cnn_model,
+    evaluate_button,
+    evaluate_validation_per_chart,
+    save_button,
+    torch,
+):
+    if evaluate_button.value:
+        print(evaluate_validation_per_chart())
+
+    if save_button.value:
+        _path = 'cnn_model.pth'
+        torch.save(cnn_model.state_dict(), _path)
+        print('Saved model to ', _path)
     return
 
 
@@ -325,26 +361,20 @@ def _(full_difficulty_data, full_model_data, onset_lstm_model):
 @app.cell
 def _(models):
     selection_model = models.PumpItUpConvolutionSelectionLSTM()
-    return (selection_model,)
+    return
 
 
 @app.cell
 def _(device, np, torch):
     step_data = torch.tensor(np.random.rand(20, 10, 5, 4) > 0.5).float().to(device)
     step_data.shape
-    return (step_data,)
+    return
 
 
 @app.cell
 def _(device, np, torch):
     delta_time_data = torch.tensor(np.random.rand(20, 10, 2)).float().to(device)
     delta_time_data.shape
-    return (delta_time_data,)
-
-
-@app.cell
-def _(delta_time_data, selection_model, step_data):
-    selection_model(step_data, delta_time_data)
     return
 
 
@@ -386,6 +416,13 @@ def _():
         pickle,
         torch,
     )
+
+
+@app.cell(hide_code=True)
+def _(torch):
+    print('HasCuda:', torch.cuda.is_available())
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    return (device,)
 
 
 if __name__ == "__main__":
