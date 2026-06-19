@@ -136,55 +136,34 @@ def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
     def add(key, value):
         stepfile.append(msdparser.MSDParameter([key, value]))
 
-    add('VERSION'         , '0.81')
-    add('TITLE'           , 'PROTOTYPE')
-    add('SUBTITLE'        , '')
-    add('ARTIST'          , 'UNKNOWN')
-    #add('GENRE'           , 'WORLD MUSIC')
-    #add('ORIGIN'          , '')
-    #add('CREDIT'          , 'DECRYPT')
-    #add('BANNER'          , '16A9_B.png')
-    #add('BACKGROUND'      , '16A9.png')
-    #add('PREVIEWVID'      , '16A9_P.mpg')
-    #add('CDTITLE'         , '')
-    add('MUSIC'           , audio_path)
-    #add('OFFSET'          , '0.0')
-    add('SELECTABLE'      , 'YES')
-    #add('SONGTYPE'        , 'ARCADE')
-    #add('SONGCATEGORY'    , 'ORIGINAL')
-    add('VOLUME'          , '100')
-    add('DISPLAYBPM'      , '120.000000')
-    add('BPMS'            , '0.000=120.000')
-    add('TIMESIGNATURES'  , '0.000=4=4')
-    add('TICKCOUNTS'      , '0.000=4')
-    add('COMBOS'          , '0.000=1')
-    add('SPEEDS'          , '0.000=1.000=0.000=0')
-    add('SCROLLS'         , '0.000=1.000')
-    #add('LABELS'          , '0.000=Song Start')
-    #add('LASTSECONDHINT'  , '99.264000')
+    add('VERSION', '0.83')
+    add('TITLE', 'unknown')
+    add('SUBTITLE', '')
+    add('ARTIST', '')
+    add('TITLETRANSLIT', '')
+    add('SUBTITLETRANSLIT', '')
+    add('ARTISTTRANSLIT', '')
+    add('GENRE', '')
+    add('CREDIT', '')
+    add('MUSIC', audio_path)
+    add('BANNER', '')
+    add('BACKGROUND', '')
+    add('CDTITLE', '')
+    add('SAMPLESTART', '0.000000')
+    add('SAMPLELENGTH', '0.000000')
+    add('SELECTABLE', 'YES')
+    add('OFFSET', '0.000000')
+    add('BPMS', '0.000000=120.0000')
+    add('STOPS', '')
+    add('BGCHANGES', '')
+    add('FGCHANGES', '')
+    add('NOTEDATA', '')
 
-    add('NOTEDATA','')
-    add('STEPSTYPE','pump-single')
-    add('DESCRIPTION', difficulty_str)
-    add('DIFFICULTY','Edit')
-    add('METER','1')
-    #add('RADARVALUES','-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000,-1.000000')
-    #add('CREDIT','IDK')
-    add('OFFSET','0.000000')
-    #add('BPMS','0.000000=120.000000')
-    add('STOPS','')
-    add('DELAYS','')
-    add('WARPS','')
-    add('TIMESIGNATURES','0.000000=4=4')
-    add('TICKCOUNTS','0.000000=2')
-    add('COMBOS','0.000000=1')
-    add('SPEEDS','0.000000=1.000000=0.000000=0')
-    add('SCROLLS','0.000000=1.000000')
-    add('FAKES','')
-    #add('LABELS','0.000000=Song Start')
-    #add('LASTSECONDHINT','104.376000')
-    #add('CHARTSTYLE', 'ACTIVE');
-
+    add('STEPSTYPE', 'pump-single');
+    add('DESCRIPTION', '');
+    add('DIFFICULTY', 'Edit');
+    add('METER', '15');
+    add('RADARVALUES', '0,0,0,0,0');
 
     notes_per_measure = defaultdict(list)
 
@@ -205,35 +184,6 @@ def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
             f.write(str(attribute))
             f.write('\n')
 
-    # simulating...
-
-    from playsound3 import playsound
-
-    def show_step(step, placement):
-        code = "".join(["-" if x == "0" else x for x in step])
-        print(
-            "[{:10.4f}] {}".format(
-                placement, code
-            )
-        )
-
-    playsound(audio_path, block=False, backend='ffplay')
-    time.sleep(placements[0])
-        
-    show_step(steps[0], placements[0])
-
-    base_music_time = placements[0]
-    base_real_time = time.time()
-
-    for step, placement in zip(steps[1:], placements[1:]):
-        to_sleep = (placement - base_music_time) - (
-            time.time() - base_real_time
-        )
-
-        time.sleep(max(0, to_sleep))
-        show_step(step, placement)
-
-    time.sleep(2)
 
     
 
