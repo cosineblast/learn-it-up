@@ -219,17 +219,19 @@ def _(epoch_count_input, train_button, train_epochs):
 @app.cell
 def _(
     cnn_model,
+    defaultdict,
     device,
     evaluation,
     loss_fn,
     mo,
     namedtuple,
+    np,
     validation_features,
     validation_stepfiles,
 ):
     FullEvaluation = namedtuple('FullEvaluation', 
                                 ['avg_precision',  'avg_recall', 'avg_fscore', 
-                                 'avg_loss', 'avg_raw_auc_score', 'avg_aligned_auc_score', 'avg_accuracy'])
+                                 'avg_loss', 'avg_raw_auc_score', 'avg_aligned_auc_score', 'avg_accuracy', 'avg_best_thresholds'])
 
     def evaluate_validation_per_chart(stepfiles=validation_stepfiles, file_features=validation_features):
         chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
@@ -243,6 +245,8 @@ def _(
         sum_raw_auc = 0
         sum_aligned_auc = 0
         sum_accuracy = 0
+
+        best_thresholds = defaultdict(list)
 
         cnn_model.eval()
 
@@ -262,12 +266,15 @@ def _(
                     sum_aligned_auc += result.aligned_auc_score
                     sum_accuracy += result.accuracy
 
+                    best_thresholds[chart.difficulty].append(result.threshold_ideal)
+
                     bar.update()
 
         return FullEvaluation(sum_precision / chart_count,  sum_recall / chart_count,  sum_fscore / chart_count,
                               sum_mean_loss / chart_count,
                               sum_raw_auc / chart_count, sum_aligned_auc / chart_count,
-                              sum_accuracy / chart_count)
+                              sum_accuracy / chart_count,
+                              {difficulty:np.mean(best_thresholds[difficulty]) for difficulty in best_thresholds})
 
     return (evaluate_validation_per_chart,)
 
@@ -286,16 +293,17 @@ def _(mo):
     return evaluate_button, save_button
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     cnn_model,
     evaluate_button,
     evaluate_validation_per_chart,
+    mo,
     save_button,
     torch,
 ):
     if evaluate_button.value:
-        print(evaluate_validation_per_chart())
+        mo.output.append(evaluate_validation_per_chart()._asdict())
 
     if save_button.value:
         _path = 'cnn_model.pth'
@@ -399,12 +407,13 @@ def _():
     import models
     import json
     import evaluation
-    from collections import namedtuple
+    from collections import namedtuple, defaultdict
     from torch.utils.data import DataLoader
 
     return (
         DataLoader,
         F,
+        defaultdict,
         evaluation,
         json,
         loading,
