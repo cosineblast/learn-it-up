@@ -207,6 +207,148 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         return self.transform((frames, difficulty, is_step))
 
+ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
+
+class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
+
+    def __init__(self, stepfiles, all_features, unroll_length, transform=(lambda x:x)):
+        def get_chart_stats(chart, stepfile_index):
+            # these are inclusive
+            first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
+            last_frame_index = floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
+
+            len_frames = last_frame_index - first_frame_index + 1
+
+            assert len(chart.steps) >= 2
+            assert first_frame_index >= 0
+            assert last_frame_index < all_features[stepfile_index].len
+            assert first_frame_index < last_frame_index
+
+            return ChartBlockStats(len_frames // unroll_length + (len_frames % unroll_length != 0), first_frame_index, last_frame_index, stepfile_index)
+
+        charts = [(chart, stepfile_index)
+            for stepfile_index, stepfile in enumerate(stepfiles) for chart in stepfile.charts]
+
+        chart_stats = [get_chart_stats(chart, index) for chart,index in charts]
+        block_counts = list(stat.len_blocks for stat in chart_stats)
+
+        self.charts_and_stepfiles = charts
+        self.chart_stats = chart_stats
+        self.len_blocks = sum(stat.len_blocks for stat in chart_stats) 
+        self.all_features = all_features 
+        self.stepfiles = stepfiles
+        self.chart_lens = block_counts
+        self.chart_len_sums = list(itertools.accumulate(block_counts))
+        self.transform = transform
+        self.unroll_length = unroll_length
+
+    def __len__(self):
+        return self.len_blocks
+
+    def _get_target_chart_index(self, target_index):
+        if target_index < self.chart_len_sums[0]:
+            return 0, 0
+
+        l = 0
+        r = len(self.chart_len_sums)-1
+
+        assert not (target_index < self.chart_len_sums[l])
+        assert target_index < self.chart_len_sums[r]
+
+        while l+1 != r:
+            m = (l + r) // 2
+
+            if target_index < self.chart_len_sums[m]:
+                r = m
+            else:
+                l = m
+
+        assert not (target_index < self.chart_len_sums[l])
+        assert target_index < self.chart_len_sums[r]
+
+        return r, self.chart_len_sums[l]
+
+    def _get_frame_context(self, view, first_frame, last_frame):
+        array, start, length = view
+
+        result = []
+        for feature_index in range(first_frame, last_frame+1):
+            a = start+feature_index-CONTEXT_RADIUS
+            b = start+feature_index+CONTEXT_RADIUS+1
+            result.append(array[a:b])
+
+        return np.stack(result)
+
+    def _get_next_step_index(self, steps, target_time):
+        if steps[0].time_in_seconds >= target_time:
+            return 0
+
+        if steps[-1].time_in_seconds < target_time:
+            return None
+
+        l = 0
+        r = len(steps)-1
+
+        assert not (steps[l].time_in_seconds >= target_time)
+        assert steps[r].time_in_seconds >= target_time
+
+        while l+1!=r:
+            m = (l + r) // 2
+
+            if steps[m].time_in_seconds >= target_time:
+                r = m
+            else:
+                l = m
+                
+        assert not (steps[l].time_in_seconds >= target_time)
+        assert steps[r].time_in_seconds >= target_time
+
+        return r
+
+
+    def __getitem__(self, target_index):
+        assert isinstance(target_index, int)
+        assert target_index < len(self)
+
+        chart_index, total_blocks_before_chart = self._get_target_chart_index(target_index)
+
+        stats = self.chart_stats[chart_index]
+        chart, stepfile_index = self.charts_and_stepfiles[chart_index]
+        file_features = self.all_features[stepfile_index]
+
+        block_index = target_index - total_blocks_before_chart
+
+        block_first_frame = block_index * self.unroll_length + stats.first_frame_index
+
+        # inclusive
+        block_last_frame = block_first_frame + self.unroll_length-1
+        block_last_frame = min(block_last_frame, stats.last_frame_index)
+
+        frames = self._get_frame_context(file_features, block_first_frame, block_last_frame)
+
+        block_length = block_last_frame - block_first_frame + 1
+        difficulty = np.zeros((block_length, 25))
+        difficulty[:, chart.difficulty-1] = 1.0
+
+        first_next_step = self._get_next_step_index(chart.steps, block_first_frame / FRAMES_PER_SECOND)
+        last_next_step = self._get_next_step_index(chart.steps, block_last_frame / FRAMES_PER_SECOND)
+
+        # since first_next_step and last_next_step are limited by the last step in the file,
+        # there must always be a step >= it
+        assert first_next_step is not None
+        assert last_next_step is not None
+
+        step_indices = np.array([int(step.time_in_seconds * FRAMES_PER_SECOND) - block_first_frame
+                                for step in chart.steps[first_next_step:last_next_step+1]],
+                                dtype=int)
+
+        step_indices_ok = (0 <= step_indices) & (step_indices < block_length)
+
+        is_step = np.zeros(block_length, dtype=bool)
+        is_step[step_indices[step_indices_ok]] = True
+        
+        return self.transform((frames, difficulty, is_step))
+
 class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
 
     def __init__(self, stepfiles, unroll_length, transform=(lambda x:x)):
