@@ -69,7 +69,7 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
 # unused for now, cnn alone gives us ok performance, we will try this in the future.
 # currently unused because of the different input tensor shape, for which we have not
 # yet implemented a dataset class for
-class PumpItUpConvolutionOnset(nn.Module):
+class PumpItUpConvolutionLSTMOnset(nn.Module):
     def __init__(self):
         super().__init__()
 

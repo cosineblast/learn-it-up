@@ -119,7 +119,7 @@ def _(
 
         with mo.status.progress_bar(total=size, title='Training...', remove_on_exit=True) as bar:
 
-            for batch, ((frames, difficulties), y) in enumerate(training_loader):
+            for batch, (frames, difficulties, y) in enumerate(training_loader):
                 # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
                 frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
                 difficulties = difficulties.float().to(device)
@@ -342,7 +342,7 @@ def _(cnn_difficulty_data, cnn_model, cnn_sample_data):
 
 @app.cell
 def _(models):
-    onset_lstm_model = models.PumpItUpConvolutionOnset()
+    onset_lstm_model = models.PumpItUpConvolutionLSTMOnset()
     return (onset_lstm_model,)
 
 

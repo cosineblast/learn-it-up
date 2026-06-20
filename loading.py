@@ -76,7 +76,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.len_frames
 
-    def __init__(self, stepfiles, all_features, transform_x=(lambda x:x), transform_y=(lambda y:y)):
+    def __init__(self, stepfiles, all_features, transform=(lambda x:x)):
         def get_chart_stats(chart, features):
             first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
             last_frame_index = floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
@@ -111,8 +111,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         self.stepfile_len_sums = list(itertools.accumulate(stats.len_frames for stats in stepfile_stats))
         self.stepfile_lens = list((stats.len_frames for stats in stepfile_stats))
-        self.transform_x = transform_x
-        self.transform_y = transform_y
+        self.transform = transform
 
 
     def _get_target_chart(self, file, file_stats, target_index, total):
@@ -206,7 +205,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
         is_step = (False if next_step is None else 
                    floor(next_step.time_in_seconds * FRAMES_PER_SECOND) == feature_index)
 
-        return self.transform_x((frames, difficulty)), self.transform_y(is_step)
+        return self.transform((frames, difficulty, is_step))
 
 class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
 

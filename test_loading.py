@@ -94,7 +94,7 @@ class TestCNNDataset(unittest.TestCase):
 
     def test_difficulty_first_chart_ok(self):
         for i in irange(0, 100):
-            (_, difficulty), _, = self.dataset[i]
+            _, difficulty, _, = self.dataset[i]
             self.assertEqual(difficulty[1], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
@@ -102,7 +102,7 @@ class TestCNNDataset(unittest.TestCase):
         step_indices = set()
 
         for i in irange(0, 100):
-            (_, _), y, = self.dataset[i]
+            _, _, y = self.dataset[i]
             if y:
                 step_indices.add(i)
 
@@ -111,7 +111,7 @@ class TestCNNDataset(unittest.TestCase):
 
     def test_frames_first_chart_ok(self):
         for i in irange(0, 100):
-            (frames, _), _, = self.dataset[i]
+            frames, _, _ = self.dataset[i]
             f = self.context_around(i+100)
             np.testing.assert_array_equal(frames, f)
 
@@ -119,13 +119,13 @@ class TestCNNDataset(unittest.TestCase):
 
     def test_difficulty_second_chart_ok(self):
         for i in irange(101,301):
-            (_, difficulty), _, = self.dataset[i]
+            _, difficulty, _ = self.dataset[i]
             self.assertEqual(difficulty[7], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
     def test_frames_second_chart_ok(self):
         for i in irange(101,301):
-            (frames, _), _, = self.dataset[i]
+            frames, _, _ = self.dataset[i]
             b = i-101
             f = self.context_around(b+150)
             np.testing.assert_array_equal(frames, f)
@@ -134,7 +134,7 @@ class TestCNNDataset(unittest.TestCase):
         step_indices = set()
 
         for i in irange(101,301):
-            (_, _), y, = self.dataset[i]
+            _, _, y = self.dataset[i]
             if y:
                 step_indices.add(i)
 
@@ -145,7 +145,7 @@ class TestCNNDataset(unittest.TestCase):
 
     def test_difficulty_third_chart_ok(self):
         for i in irange(302, 792):
-            (_, difficulty), _, = self.dataset[i]
+            _, difficulty, _ = self.dataset[i]
             self.assertEqual(difficulty[11], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
@@ -153,7 +153,8 @@ class TestCNNDataset(unittest.TestCase):
         step_indices = set()
 
         for i in irange(302, 792):
-            (_, _), y, = self.dataset[i]
+            _, _, y = self.dataset[i]
+
             if y:
                 step_indices.add(i)
 
@@ -161,7 +162,7 @@ class TestCNNDataset(unittest.TestCase):
 
     def test_frames_third_chart_ok(self):
         for i in irange(302,792):
-            (frames, _), _, = self.dataset[i]
+            frames, _, _, = self.dataset[i]
             b = i-302
             f = self.context_around(b+1)
             np.testing.assert_array_equal(frames, f)
