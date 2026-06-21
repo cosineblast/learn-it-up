@@ -86,25 +86,25 @@ def _(DataLoader, training_dataset):
 
 @app.cell
 def _(device, models):
-    cnn_model = models.PumpItUpConvolutionCNNOnset().float().to(device)
-    cnn_model
-    return (cnn_model,)
+    model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True).float().to(device)
+    model
+    return (model,)
 
 
 @app.cell
-def _(cnn_model, nn, torch):
+def _(model, nn, torch):
     loss_fn = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(cnn_model.parameters(), lr=0.001, weight_decay=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     return loss_fn, optimizer
 
 
 @app.cell
 def _(
     BATCH_SIZE,
-    cnn_model,
     device,
     loss_fn,
     mo,
+    model,
     optimizer,
     torch,
     training_dataset,
@@ -113,7 +113,7 @@ def _(
     from math import ceil 
 
     def train_epoch():
-        cnn_model.train()
+        model.train()
 
         size = ceil(len(training_dataset) / BATCH_SIZE)
 
@@ -121,18 +121,18 @@ def _(
 
             for batch, (frames, difficulties, y) in enumerate(training_loader):
                 # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
-                frames = frames.transpose(1, 3).transpose(2, 3).float().to(device)
+                frames = frames.to(device)
                 difficulties = difficulties.float().to(device)
                 y = y.float().to(device)
 
-                pred = cnn_model(frames, difficulties)
+                pred = model(frames, difficulties)
 
                 loss = loss_fn(pred, y)
 
                 # Backpropagation
                 loss.backward()
 
-                torch.nn.utils.clip_grad_norm_(cnn_model.parameters(), max_norm=5.0, error_if_nonfinite=True)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0, error_if_nonfinite=True)
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -145,8 +145,8 @@ def _(
 
 @app.cell
 def _(
-    cnn_model,
     evaluate_validation_per_chart,
+    model,
     np,
     should_save_models,
     should_validate_training,
@@ -171,7 +171,7 @@ def _(
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
             if result.avg_aligned_auc_score > best_score and should_save_models.value:
-                torch.save(cnn_model.state_dict(), f'best_onset_model.pth')
+                torch.save(model.state_dict(), f'best_onset_model.pth')
                 best_score = result.avg_aligned_auc_score
 
             if epoch % 10 == 0 and should_validate_training.value:
@@ -218,12 +218,12 @@ def _(epoch_count_input, train_button, train_epochs):
 
 @app.cell
 def _(
-    cnn_model,
     defaultdict,
     device,
     evaluation,
     loss_fn,
     mo,
+    model,
     namedtuple,
     np,
     validation_features,
@@ -248,13 +248,13 @@ def _(
 
         best_thresholds = defaultdict(list)
 
-        cnn_model.eval()
+        model.eval()
 
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
             for stepfile, features in zip(stepfiles, file_features):
 
                 for chart in stepfile.charts:
-                    result = evaluation.measure_onset_performance(cnn_model, chart, features, loss_fn, device)
+                    result = evaluation.measure_onset_performance(model, chart, features, loss_fn, device)
 
                     sum_precision += result.precision 
                     sum_recall    += result.recall 
@@ -295,10 +295,10 @@ def _(mo):
 
 @app.cell
 def _(
-    cnn_model,
     evaluate_button,
     evaluate_validation_per_chart,
     mo,
+    model,
     save_button,
     torch,
 ):
@@ -306,8 +306,8 @@ def _(
         mo.output.append(evaluate_validation_per_chart()._asdict())
 
     if save_button.value:
-        _path = 'cnn_model.pth'
-        torch.save(cnn_model.state_dict(), _path)
+        _path = 'onset_model.pth'
+        torch.save(model.state_dict(), _path)
         print('Saved model to ', _path)
     return
 
@@ -321,29 +321,35 @@ def _(mo):
 
 
 @app.cell
+def _(device, models):
+    sample_cnn_model = models.PumpItUpConvolutionCNNOnset().float().to(device)
+    return (sample_cnn_model,)
+
+
+@app.cell
 def _(device, np, torch):
     cnn_sample_data = torch.tensor(np.random.randn(10, 3, 15, 80)).type(torch.float32).to(device)
     cnn_sample_data.shape
-    return (cnn_sample_data,)
+    return
 
 
 @app.cell
 def _(F, device, torch):
     cnn_difficulty_data = F.one_hot(torch.tensor([15]).repeat(10), num_classes=25).type(torch.float32).to(device)
     cnn_difficulty_data.shape
-    return (cnn_difficulty_data,)
+    return
 
 
 @app.cell
-def _(cnn_difficulty_data, cnn_model, cnn_sample_data):
-    cnn_model(cnn_sample_data, cnn_difficulty_data)
+def _(full_difficulty_data, full_model_data, sample_cnn_model):
+    sample_cnn_model(full_model_data, full_difficulty_data)
     return
 
 
 @app.cell
 def _(models):
-    onset_lstm_model = models.PumpItUpConvolutionLSTMOnset()
-    return (onset_lstm_model,)
+    sample_lstm_model = models.PumpItUpConvolutionLSTMOnset()
+    return (sample_lstm_model,)
 
 
 @app.cell
@@ -361,28 +367,8 @@ def _(F, torch):
 
 
 @app.cell
-def _(full_difficulty_data, full_model_data, onset_lstm_model):
-    onset_lstm_model(full_model_data, full_difficulty_data)
-    return
-
-
-@app.cell
-def _(models):
-    selection_model = models.PumpItUpConvolutionSelectionLSTM()
-    return
-
-
-@app.cell
-def _(device, np, torch):
-    step_data = torch.tensor(np.random.rand(20, 10, 5, 4) > 0.5).float().to(device)
-    step_data.shape
-    return
-
-
-@app.cell
-def _(device, np, torch):
-    delta_time_data = torch.tensor(np.random.rand(20, 10, 2)).float().to(device)
-    delta_time_data.shape
+def _(full_difficulty_data, full_model_data, sample_lstm_model):
+    sample_lstm_model(full_model_data, full_difficulty_data)
     return
 
 

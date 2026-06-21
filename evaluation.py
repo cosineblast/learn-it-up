@@ -52,7 +52,7 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
 
     with torch.no_grad():
         ys_tensor = torch.tensor(ys).float().to(device)
-        frame_features = torch.tensor(frame_features).transpose(1, 3).transpose(2, 3).float().to(device)
+        frame_features = torch.tensor(frame_features).float().to(device)
         difficulties = torch.tensor(difficulties).float().to(device)
 
         log_scores = model(frame_features, difficulties)

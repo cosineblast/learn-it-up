@@ -63,7 +63,7 @@ class TestEvaluationWorks(unittest.TestCase):
             return -10
 
         def perfect_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
+            features_batch = features_batch.numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
@@ -77,7 +77,7 @@ class TestEvaluationWorks(unittest.TestCase):
         # almost perfect, just misaligned by 1 frame.
         # misses one frame if first and second frames are steps
         def near_perfect_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
+            features_batch = features_batch.numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
@@ -90,7 +90,7 @@ class TestEvaluationWorks(unittest.TestCase):
             return torch.tensor(result)
 
         def off_by_one_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
+            features_batch = features_batch.numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
@@ -107,7 +107,7 @@ class TestEvaluationWorks(unittest.TestCase):
 
         # misaligned by 3 frames.
         def very_misaligned_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy().transpose((0, 2, 3, 1))
+            features_batch = features_batch.numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10

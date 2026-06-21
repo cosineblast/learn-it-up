@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 class PumpItUpConvolutionCNNOnset(nn.Module):
-    def __init__(self, dropout=0.5):
+    def __init__(self, dropout=0.5, channel_is_last=False):
         super().__init__()
 
         # Input: 
@@ -15,6 +15,15 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         # - 3 is the number of audio channels 
         # - 80 are the actiavtion values for each frequency, measured in logarithm, with frequency in mel scale
         # Output: (Batch) tensor containing the log-odds of the [0,1] value for whether a frame should be placed at this position
+        #
+        # Additionally, if X is of the shape (Batch x Unroll x 3 x 15 x 80), it is flattened to (Batch * Unroll x 3 x 15 x 80) for convenience.
+        # 
+        # Parameters:
+        # - dropout: Dropout to use after fully connected linear layers.
+        # - channel_is_last: True if the channel dimension of the input tensor X is the last one of the tensor, instead of the first.
+        # In this case, the input tensor is of shape (Batch x 15 x 80 x 3)
+
+        self.channel_is_last = channel_is_last
 
         self.convolution = nn.Sequential(
             nn.Conv2d(
@@ -48,6 +57,17 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         )
 
     def forward(self, x, difficulty):
+        # (Batch x 3 x 15 x 80), (Batch x 25)
+        # or (Batch x Unroll x 3 x 15 x 80), (Batch x 25)
+        if len(x.shape) == 5:
+            unroll = x.shape[1]
+            x = torch.flatten(x, start_dim=0, end_dim=1)
+            difficulty = difficulty.repeat_interleave(unroll, dim=0)
+
+        if self.channel_is_last:
+            # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
+            x = x.transpose(1, 3).transpose(2, 3)
+            
         # Batch x 3 x 15 x 80
         convolved = self.convolution(x)
 

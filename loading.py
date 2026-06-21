@@ -12,9 +12,7 @@ import random
 
 from pathlib import Path
 
-ChartStats = namedtuple('ChartStats', ['len_frames', 'first_frame_index', 'last_frame_index'])
-StepfileStats = namedtuple('StepfileStats', ['len_frames', 'chart_stats'])
-FeatureView =namedtuple('FeatureView', ['array', 'start', 'len'])
+FeatureView = namedtuple('FeatureView', ['array', 'start', 'len'])
 
 
 CONTEXT_RADIUS=7
