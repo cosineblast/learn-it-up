@@ -36,40 +36,43 @@ def stepfile_of(charts, title='some file'):
 def step_at(time):
     return StepInfo(time_in_beats=0.0, time_in_seconds=time, stepcode='10000')
 
+def sample_input():
+
+    stepfiles = [
+        stepfile_of([
+            # from frame 0 to frame 100
+            chart_of([step_at(1.0), step_at(1.5), step_at(1.75), step_at(1.832), step_at(1.948), step_at(2.0)], diff=2),
+
+            # from frame 101 to frame 301
+            chart_of([step_at(1.5), step_at(2.5), step_at(2.75), step_at(3.5)], diff=8),
+        ]),
+
+        stepfile_of([
+                chart_of([step_at(0.01), step_at(0.5), step_at(4.91)], diff=12),
+                # from frame 302 to frame 792
+        ]),
+        ]
+
+    # 5 seconds of audio features
+    audio = np.zeros((3, 500)) + np.arange(500)
+    audio = audio.transpose(1, 0)
+
+    audio_len = audio.shape[0]
+
+    padding = np.ones((7, 3)) * DEFAULT_VALUE
+    padded_audio = np.concat([padding, audio, padding])
+
+    padded_audio_view = loading.FeatureView(padded_audio, 7, audio_len)
+
+    return stepfiles, [padded_audio_view, padded_audio_view], audio
+
 class TestCNNDataset(unittest.TestCase):
 
-    def setUp(self):
-        stepfiles = [
-            stepfile_of([
-                # from frame 0 to frame 100
-                chart_of([step_at(1.0), step_at(1.5), step_at(1.75), step_at(1.832), step_at(1.948), step_at(2.0)], diff=2),
-
-                # from frame 101 to frame 301
-                chart_of([step_at(1.5), step_at(2.5), step_at(2.75), step_at(3.5)], diff=8),
-            ]),
-
-            stepfile_of([
-                    chart_of([step_at(0.01), step_at(0.5), step_at(4.91)], diff=12),
-                    # from frame 302 to frame 792
-            ]),
-            ]
-
-        # 5 seconds of audio features
-        audio = np.zeros((3, 500)) + np.arange(500)
-        audio = audio.transpose(1, 0)
-
-        self.audio = audio
-        audio_len = audio.shape[0]
-
-        padding = np.ones((7, 3)) * DEFAULT_VALUE
-        padded_audio = np.concat([padding, audio, padding])
-
-        padded_audio_view = loading.FeatureView(padded_audio, 7, audio_len)
-
-        self.dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view]) 
-        self.dataset1 = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view], 1)
-
     def test_all_ok(self):
+        stepfiles, audios, _ = sample_input()
+        self.dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, audios) 
+        self.dataset1 = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, audios, 1)
+        
         assert len(self.dataset) == len(self.dataset1)
 
         for i in range(len(self.dataset)):
@@ -86,36 +89,10 @@ class TestCNNDataset(unittest.TestCase):
 class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
 
     def setUp(self):
-        stepfiles = [
-            stepfile_of([
-                # from frame 0 to frame 100
-                chart_of([step_at(1.0), step_at(1.5), step_at(1.75), step_at(1.832), step_at(1.948), step_at(2.0)], diff=2),
+        stepfiles, audios, audio = sample_input()
 
-                # from frame 101 to frame 301
-                chart_of([step_at(1.5), step_at(2.5), step_at(2.75), step_at(3.5)], diff=8),
-            ]),
-
-            stepfile_of([
-                    chart_of([step_at(0.01), step_at(0.5), step_at(4.91)], diff=12),
-                    # from frame 302 to frame 792
-            ]),
-            ]
-
-        # 5 seconds of audio features
-        audio = np.zeros((3, 500)) + np.arange(500)
-        audio = audio.transpose(1, 0)
-
+        self.dataset = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, audios, 1)
         self.audio = audio
-        audio_len = audio.shape[0]
-
-        padding = np.ones((7, 3)) * DEFAULT_VALUE
-        padded_audio = np.concat([padding, audio, padding])
-
-        padded_audio_view = loading.FeatureView(padded_audio, 7, audio_len)
-
-        self.dataset = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view], 1)
-        #self.dataset20 = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view], 20)
-
 
     def context_around(self, i):
         result = np.zeros((15, 3))
@@ -224,40 +201,11 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
 
 class TestLSTMOnsetDatasetUnrollN(unittest.TestCase):
 
-    def setUp(self):
-        stepfiles = [
-            stepfile_of([
-                # from frame 0 to frame 100
-                chart_of([step_at(1.0), step_at(1.5), step_at(1.75), step_at(1.832), step_at(1.948), step_at(2.0)], diff=2),
-
-                # from frame 101 to frame 301
-                chart_of([step_at(1.5), step_at(2.5), step_at(2.75), step_at(3.5)], diff=8),
-            ]),
-
-            stepfile_of([
-                    chart_of([step_at(0.01), step_at(0.5), step_at(4.91)], diff=12),
-                    # from frame 302 to frame 792
-            ]),
-            ]
-
-        # 5 seconds of audio features
-        audio = np.zeros((3, 500)) + np.arange(500)
-        audio = audio.transpose(1, 0)
-
-        self.audio = audio
-        audio_len = audio.shape[0]
-
-        padding = np.ones((7, 3)) * DEFAULT_VALUE
-        padded_audio = np.concat([padding, audio, padding])
-
-        padded_audio_view = loading.FeatureView(padded_audio, 7, audio_len)
-
-        self.stepfiles = stepfiles
-        self.padded_audio_view =padded_audio_view
-        self.dataset1 = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view], 1)
-
     def test_all_ok(self):
-        dataset_block = loading.PumpItUpConvolutionLSTMOnsetDataset(self.stepfiles, [self.padded_audio_view, self.padded_audio_view], 20)
+        stepfiles, audios, _ = sample_input()
+        
+        dataset1 = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, audios, 1)
+        dataset_block = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, audios, 20)
 
         base = 0
         for block_index in range(len(dataset_block)):
@@ -271,7 +219,7 @@ class TestLSTMOnsetDatasetUnrollN(unittest.TestCase):
             self.assertEqual(is_step_block.shape, (n,))
 
             for i in range(frames_block.shape[0]):
-                frames, difficulty, is_step = self.dataset1[base+i]
+                frames, difficulty, is_step = dataset1[base+i]
 
                 np.testing.assert_array_equal(difficulty_block[i].reshape((1, 25)), difficulty)
                 np.testing.assert_array_equal(is_step_block[i].reshape((1,)), is_step)
