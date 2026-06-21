@@ -37,16 +37,15 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
     first_frame = frame_of(chart.steps[0])
     last_frame = frame_of(chart.steps[-1])
 
-    frame_features = loading.get_all_song_context_features(features, first_frame, last_frame)
+    frame_features = loading.get_all_song_context_features(features, first_frame, last_frame, upshape=True)
 
-    difficulties = np.zeros(25)
-    difficulties[chart.difficulty-1] = 1.0
-    difficulties = np.tile(difficulties, (frame_features.shape[0], 1))
+    difficulties = np.zeros((1, 25))
+    difficulties[0, chart.difficulty-1] = 1.0
 
     step_frames = np.array([frame_of(step) for step in chart.steps])
     step_onsets = step_frames - first_frame
-    ys = np.zeros(frame_features.shape[0], dtype=np.bool)
-    ys[step_onsets] = True
+    ys = np.zeros((1, frame_features.shape[1]), dtype=np.bool)
+    ys[0, step_onsets] = True
 
     # running the model
 
@@ -59,6 +58,11 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
 
         scores = F.sigmoid(log_scores).detach().cpu().numpy()
         mean_loss = torch.mean(loss_fn(log_scores, ys_tensor)).detach().cpu().numpy()
+
+        scores = scores.flatten()
+        ys = ys.flatten()
+
+        
 
     # analyzing onsets 
 

@@ -43,7 +43,7 @@ def generate_stepfile(audio_path,
 
     print("Loading onset model file {}...".format(onset_model_path), aae1)
     onset_model_state = torch.load(onset_model_path, weights_only=False, map_location=torch.device(device))
-    onset_model = models.PumpItUpConvolutionCNNOnset()
+    onset_model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True)
     onset_model.load_state_dict(onset_model_state)
 
     print()
@@ -101,7 +101,7 @@ def run_onset_model(features, onset_model, difficulty, device):
     onset_model.eval()
 
     with torch.no_grad():
-        frame_features = torch.tensor(frame_features).transpose(1, 3).transpose(2, 3).float().to(device)
+        frame_features = torch.tensor(frame_features).float().to(device)
         difficulties = torch.tensor(difficulties).float().to(device)
 
         log_scores = onset_model(frame_features, difficulties)

@@ -63,59 +63,59 @@ class TestEvaluationWorks(unittest.TestCase):
             return -10
 
         def perfect_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy()
+            features_batch = torch.flatten(features_batch, start_dim=0, end_dim=1).numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
 
             for i in range(features_batch.shape[0]):
-                result[i] = perfect_model_single(features_batch[i], difficulty_batch[i])
+                result[i] = perfect_model_single(features_batch[i], difficulty_batch[0])
 
-            return torch.tensor(result)
+            return torch.tensor(result)[None, :]
 
 
         # almost perfect, just misaligned by 1 frame.
         # misses one frame if first and second frames are steps
         def near_perfect_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy()
+            features_batch = torch.flatten(features_batch, start_dim=0, end_dim=1).numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
 
             for i in range(1, features_batch.shape[0]):
-                result[i-1] = perfect_model_single(features_batch[i], difficulty_batch[i])
+                result[i-1] = perfect_model_single(features_batch[i], difficulty_batch[0])
 
             result[0] = perfect_model_single(features_batch[0], difficulty_batch[0])
 
-            return torch.tensor(result)
+            return torch.tensor(result)[None, :]
 
         def off_by_one_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy()
+            features_batch = torch.flatten(features_batch, start_dim=0, end_dim=1).numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
 
             skipped = False
             for i in range(0, features_batch.shape[0]):
-                output = perfect_model_single(features_batch[i], difficulty_batch[i])
+                output = perfect_model_single(features_batch[i], difficulty_batch[0])
                 if output > 0 and not skipped:
                     output = -10
                     skipped = True
                 result[i] = output
 
-            return torch.tensor(result)
+            return torch.tensor(result)[None, :]
 
         # misaligned by 3 frames.
         def very_misaligned_model(features_batch, difficulty_batch):
-            features_batch = features_batch.numpy()
+            features_batch = torch.flatten(features_batch, start_dim=0, end_dim=1).numpy()
             difficulty_batch = difficulty_batch.numpy()
 
             result = np.zeros(features_batch.shape[0]) - 10
 
             for i in range(3, features_batch.shape[0]):
-                result[i-3] = perfect_model_single(features_batch[i], difficulty_batch[i])
+                result[i-3] = perfect_model_single(features_batch[i], difficulty_batch[0])
 
-            return torch.tensor(result)
+            return torch.tensor(result)[None, :]
             
         def inverse_perfect_model(features_batch, difficulty_batch):
             return perfect_model(features_batch, difficulty_batch) * (-1)

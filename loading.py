@@ -53,7 +53,7 @@ def prepare_features(features, normalize=True):
 
     return FeatureView(padded, CONTEXT_RADIUS, features.shape[0])
 
-def get_all_song_context_features(features_view, first_frame, last_frame):
+def get_all_song_context_features(features_view, first_frame, last_frame, upshape=False):
     """Returns a list with all the 15-frame context windows of the given feature view,
        within the given inclusive frame range"""
 
@@ -66,7 +66,7 @@ def get_all_song_context_features(features_view, first_frame, last_frame):
     context_indices = context_indices.transpose((1, 0))
     frame_features = features[context_indices]
 
-    return frame_features
+    return frame_features[None, :] if upshape else frame_features
 
 
 class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):

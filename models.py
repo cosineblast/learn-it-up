@@ -59,7 +59,9 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
     def forward(self, x, difficulty):
         # (Batch x 3 x 15 x 80), (Batch x 25)
         # or (Batch x Unroll x 3 x 15 x 80), (Batch x 25)
-        if len(x.shape) == 5:
+        has_unroll = len(x.shape) == 5
+        if has_unroll:
+            original_batch = x.shape[0]
             unroll = x.shape[1]
             x = torch.flatten(x, start_dim=0, end_dim=1)
             difficulty = difficulty.repeat_interleave(unroll, dim=0)
@@ -83,8 +85,12 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         # Batch x 1
         output = torch.flatten(linear_result)
 
-        # Batch
-        return output
+        if has_unroll:
+            return output.reshape((original_batch, unroll))
+        else:
+            # Batch
+            return output
+
 
 # unused for now, cnn alone gives us ok performance, we will try this in the future.
 # currently unused because of the different input tensor shape, for which we have not
