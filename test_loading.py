@@ -66,106 +66,22 @@ class TestCNNDataset(unittest.TestCase):
 
         padded_audio_view = loading.FeatureView(padded_audio, 7, audio_len)
 
-        dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view])
+        self.dataset = loading.PumpItUpConvolutionCNNOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view]) 
+        self.dataset1 = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, [padded_audio_view, padded_audio_view], 1)
 
-        self.dataset = dataset
+    def test_all_ok(self):
+        assert len(self.dataset) == len(self.dataset1)
 
-    def context_around(self, i):
-        result = np.zeros((15, 3))
+        for i in range(len(self.dataset)):
 
-        k = i-7
-        j = 0
+            frames1, difficulty1, is_step1 = self.dataset1[i]
+            frames, difficulty, is_step = self.dataset[i]
 
-        while k <= i+7:
-            if k < 0 or k >= self.audio.shape[0]:
-                result[j] = DEFAULT_VALUE
-            else:
-                result[j] = self.audio[k]
-            k += 1
-            j += 1
-
-        return result
+            np.testing.assert_array_equal(frames1[0], frames)
+            np.testing.assert_array_equal(difficulty1[0], difficulty)
+            np.testing.assert_array_equal(is_step1[0], is_step)
         
 
-    def test_stats_ok(self):
-        self.assertEqual(self.dataset.inner.chart_stats[0].len_blocks, 101)
-        self.assertEqual(self.dataset.inner.chart_stats[1].len_blocks, 201)
-        self.assertEqual(len(self.dataset), 793)
-
-    def test_difficulty_first_chart_ok(self):
-        for i in irange(0, 100):
-            _, difficulty, _, = self.dataset[i]
-            self.assertEqual(difficulty[1], 1)
-            self.assertEqual(np.sum(difficulty), 1)
-
-    def test_steps_first_chart_ok(self):
-        step_indices = set()
-
-        for i in irange(0, 100):
-            _, _, y = self.dataset[i]
-            if y:
-                step_indices.add(i)
-
-        self.assertEqual(step_indices, {0, 50, 75, 83, 94, 100})
-
-
-    def test_frames_first_chart_ok(self):
-        for i in irange(0, 100):
-            frames, _, _ = self.dataset[i]
-            f = self.context_around(i+100)
-            np.testing.assert_array_equal(frames, f)
-
-    ## second chart
-
-    def test_difficulty_second_chart_ok(self):
-        for i in irange(101,301):
-            _, difficulty, _ = self.dataset[i]
-            self.assertEqual(difficulty[7], 1)
-            self.assertEqual(np.sum(difficulty), 1)
-
-    def test_frames_second_chart_ok(self):
-        for i in irange(101,301):
-            frames, _, _ = self.dataset[i]
-            b = i-101
-            f = self.context_around(b+150)
-            np.testing.assert_array_equal(frames, f)
-
-    def test_steps_second_chart_ok(self):
-        step_indices = set()
-
-        for i in irange(101,301):
-            _, _, y = self.dataset[i]
-            if y:
-                step_indices.add(i)
-
-        self.assertEqual(len(step_indices), 4)
-        self.assertEqual(step_indices, {101, 201, 226, 301})
-
-    ## third chart
-
-    def test_difficulty_third_chart_ok(self):
-        for i in irange(302, 792):
-            _, difficulty, _ = self.dataset[i]
-            self.assertEqual(difficulty[11], 1)
-            self.assertEqual(np.sum(difficulty), 1)
-
-    def test_steps_third_chart_ok(self):
-        step_indices = set()
-
-        for i in irange(302, 792):
-            _, _, y = self.dataset[i]
-
-            if y:
-                step_indices.add(i)
-
-        self.assertEqual(step_indices, {302, 351, 792})
-
-    def test_frames_third_chart_ok(self):
-        for i in irange(302,792):
-            frames, _, _, = self.dataset[i]
-            b = i-302
-            f = self.context_around(b+1)
-            np.testing.assert_array_equal(frames, f)
 
 class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
 
