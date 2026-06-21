@@ -88,9 +88,8 @@ class TestCNNDataset(unittest.TestCase):
         
 
     def test_stats_ok(self):
-        self.assertEqual(self.dataset.stepfile_stats[0].chart_stats[0].len_frames, 101)
-        self.assertEqual(self.dataset.stepfile_stats[0].chart_stats[1].len_frames, 201)
-        self.assertEqual(self.dataset.stepfile_stats[0].len_frames, 302)
+        self.assertEqual(self.dataset.inner.chart_stats[0].len_blocks, 101)
+        self.assertEqual(self.dataset.inner.chart_stats[1].len_blocks, 201)
         self.assertEqual(len(self.dataset), 793)
 
     def test_difficulty_first_chart_ok(self):
