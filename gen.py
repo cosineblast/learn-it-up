@@ -21,7 +21,8 @@ def generate_stepfile(audio_path,
                       selection_model_path,
                       result_path,
                       device,
-                      seed=None):
+                      seed=None,
+                      cnn_onset=False):
 
     difficulty = check_difficulty(difficulty_str)
 
@@ -43,7 +44,12 @@ def generate_stepfile(audio_path,
 
     print("Loading onset model file {}...".format(onset_model_path), aae1)
     onset_model_state = torch.load(onset_model_path, weights_only=False, map_location=torch.device(device))
-    onset_model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True)
+
+    if cnn_onset:
+        onset_model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True)
+    else:
+        onset_model = models.PumpItUpConvolutionLSTMOnset(channel_is_last=True)
+
     onset_model.load_state_dict(onset_model_state)
 
     print()
@@ -92,10 +98,10 @@ def run_onset_model(features, onset_model, difficulty, device):
     import scipy
     
     features = loading.prepare_features(features)
-    frame_features = loading.get_all_song_context_features(features, 0, features.len-1)
+    frame_features = loading.get_all_song_context_features(features, 0, features.len-1, upshape=True)
 
-    difficulties = np.zeros(25)
-    difficulties[difficulty-1] = 1.0
+    difficulties = np.zeros((1, 25))
+    difficulties[0, difficulty-1] = 1.0
     difficulties = np.tile(difficulties, (frame_features.shape[0], 1))
 
     onset_model.eval()
@@ -105,6 +111,8 @@ def run_onset_model(features, onset_model, difficulty, device):
         difficulties = torch.tensor(difficulties).float().to(device)
 
         log_scores = onset_model(frame_features, difficulties)
+        log_scores = log_scores.flatten()
+
         scores = F.sigmoid(log_scores).detach().cpu().numpy()
     
     # TODO: save best threhold in alongside model
@@ -294,7 +302,7 @@ def main():
 
     args = parser.parse_args()
 
-    generate_stepfile(args.audio, args.difficulty, args.placement, args.selection, args.out, args.device, args.seed)
+    generate_stepfile(args.audio, args.difficulty, args.placement, args.selection, args.out, args.device, args.seed, args.cnn_onset)
 
 def cli_parser():
     parser = argparse.ArgumentParser()
@@ -311,6 +319,7 @@ def cli_parser():
     parser.add_argument('--device', required=False, default='cpu',
                         help='The pytorch device to use')
     parser.add_argument('--seed', required=False, type=int, help='The seed to use. Pass none to use a random seed')
+    parser.add_argument('--cnn_onset', required=False, action=argparse.BooleanOptionalAction, help='Set this if the onset parameters provided are for a cnn onset detection model')
 
     return parser
 
