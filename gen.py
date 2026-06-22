@@ -5,6 +5,7 @@ import re
 import sys
 import itertools
 import time
+import json
 
 from pathlib import Path
 
@@ -22,7 +23,8 @@ def generate_stepfile(audio_path,
                       result_path,
                       device,
                       seed=None,
-                      cnn_onset=False):
+                      cnn_onset=False,
+                      threshold_file=None):
 
     difficulty = check_difficulty(difficulty_str)
 
@@ -52,6 +54,14 @@ def generate_stepfile(audio_path,
 
     onset_model.load_state_dict(onset_model_state)
 
+    if threshold_file is None:
+        thresholds = BEST_THRESHOLDS
+        print('Using default thresholds')
+    else:
+        with open(threshold_file) as f:
+            print('Using thresholds from given file')
+            thresholds = {int(key): value for key,value in json.load(f).items()}
+
     print()
 
     print("Loading selection model file {}...".format(selection_model_path), aaiau)
@@ -65,7 +75,7 @@ def generate_stepfile(audio_path,
 
     with rich.progress.Progress() as progress:
         task = progress.add_task(ooo2, start=False, total=None)
-        placements = run_onset_model(features, onset_model, difficulty, device)
+        placements = run_onset_model(features, onset_model, difficulty, thresholds, device)
 
     print('Generated', len(placements), 'steps', aae2+oaauua)
 
@@ -90,7 +100,7 @@ oaauua = '[purple]O[/purple]-[green]A[/green]-[red]A[/red]-[blue]U[/blue]-[yello
 ee = '(Eeeee)'
 eeee = '[bold][green]E[/green][yellow]E[/yellow][bright_magenta]E[/bright_magenta][blue]E[/blue][red]E[/red][yellow]E[/yellow][green]E[/green][blue]E[/blue][/bold]'
 
-def run_onset_model(features, onset_model, difficulty, device):
+def run_onset_model(features, onset_model, difficulty, thresholds, device):
     import torch
     import numpy as np
     import loading
@@ -116,7 +126,7 @@ def run_onset_model(features, onset_model, difficulty, device):
         scores = F.sigmoid(log_scores).detach().cpu().numpy()
     
     # TODO: save best threhold in alongside model
-    threshold = BEST_THRESHOLDS[difficulty]
+    threshold = thresholds[difficulty]
 
     window = np.hamming(5)
     onsets = np.convolve(scores, window, mode='same')
@@ -302,7 +312,7 @@ def main():
 
     args = parser.parse_args()
 
-    generate_stepfile(args.audio, args.difficulty, args.placement, args.selection, args.out, args.device, args.seed, args.cnn_onset)
+    generate_stepfile(args.audio, args.difficulty, args.placement, args.selection, args.out, args.device, args.seed, args.cnn_onset, args.thresholds)
 
 def cli_parser():
     parser = argparse.ArgumentParser()
@@ -320,6 +330,9 @@ def cli_parser():
                         help='The pytorch device to use')
     parser.add_argument('--seed', required=False, type=int, help='The seed to use. Pass none to use a random seed')
     parser.add_argument('--cnn_onset', required=False, action=argparse.BooleanOptionalAction, help='Set this if the onset parameters provided are for a cnn onset detection model')
+
+    parser.add_argument('--thresholds', required=False, default=None,
+                        help='If set, use the onset thresholds JSON file of the given path instead of the default thresholds')
 
     return parser
 
