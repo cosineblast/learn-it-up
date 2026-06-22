@@ -154,29 +154,29 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
 
         return np.stack(result)
 
-    def _get_next_step_index(self, steps, target_time):
-        if steps[0].time_in_seconds >= target_time:
+    def _get_next_step_index(self, steps, target_index):
+        if steps[0].time_in_seconds * FRAMES_PER_SECOND >= target_index:
             return 0
 
-        if steps[-1].time_in_seconds < target_time:
+        if steps[-1].time_in_seconds * FRAMES_PER_SECOND < target_index:
             return None
 
         l = 0
         r = len(steps)-1
 
-        assert not (steps[l].time_in_seconds >= target_time)
-        assert steps[r].time_in_seconds >= target_time
+        assert not (steps[l].time_in_seconds * FRAMES_PER_SECOND >= target_index)
+        assert steps[r].time_in_seconds * FRAMES_PER_SECOND >= target_index
 
         while l+1!=r:
             m = (l + r) // 2
 
-            if steps[m].time_in_seconds >= target_time:
+            if steps[m].time_in_seconds * FRAMES_PER_SECOND >= target_index:
                 r = m
             else:
                 l = m
                 
-        assert not (steps[l].time_in_seconds >= target_time)
-        assert steps[r].time_in_seconds >= target_time
+        assert not (steps[l].time_in_seconds * FRAMES_PER_SECOND >= target_index)
+        assert steps[r].time_in_seconds * FRAMES_PER_SECOND >= target_index
 
         return r
 
@@ -205,13 +205,13 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
         difficulty = np.zeros(25)
         difficulty[chart.difficulty-1] = 1.0
 
-        first_next_step = self._get_next_step_index(chart.steps, block_first_frame / FRAMES_PER_SECOND)
-        last_next_step = self._get_next_step_index(chart.steps, block_last_frame / FRAMES_PER_SECOND)
+        first_next_step = self._get_next_step_index(chart.steps, block_first_frame)
+        last_next_step = self._get_next_step_index(chart.steps, block_last_frame)
 
         # since first_next_step and last_next_step are limited by the last step in the file,
         # there must always be a step >= it
         assert first_next_step is not None
-        assert last_next_step is not None
+        assert last_next_step is not None, f"at index {target_index}, chart={chart_index}: expected to have next step"
 
         step_indices = np.array([int(step.time_in_seconds * FRAMES_PER_SECOND) - block_first_frame
                                 for step in chart.steps[first_next_step:last_next_step+1]],
