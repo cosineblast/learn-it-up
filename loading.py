@@ -349,7 +349,7 @@ def index_to_stepcode(index):
     stepcode[4] = (index // 256) % 4
     return ''.join(map(str, stepcode))
 
-def MaskAndPaddingTransform(unroll_length):
+def MaskAndPaddingTransform(unroll_length, skip=None):
     """
     This transform function takes a tuple containing multiple tensors X1, ..., Xn of
     possibly different shapes, but all matching the size of their their main axis as `k` (X1.shape[0] = ... = Xn.shape[0] = k).
@@ -359,10 +359,13 @@ def MaskAndPaddingTransform(unroll_length):
     """
     def maskAndPad(stuff):
         size    = stuff[0].shape[0]
-        padding = unroll_length - size
 
-        new_stuff = tuple(np.pad(x,[(0, padding)] + [(0, 0)] * (len(x.shape)-1)) for x in stuff)
-        mask = np.pad(np.ones(size), (0, padding))
+        new_stuff = tuple(
+            np.pad(x,[(0, unroll_length - x.shape[0])] + [(0, 0)] * (len(x.shape)-1))
+            if skip is None or i != skip else x
+            for i, x in enumerate(stuff))
+
+        mask = np.pad(np.ones(size), (0, unroll_length - stuff[0].shape[0]))
 
         return *new_stuff, mask
 

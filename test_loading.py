@@ -249,6 +249,19 @@ class TestMaskAndPaddingTransformWorks(unittest.TestCase):
         self.assertEqual(np.sum(mask[size:unroll]), 0)
         self.assertEqual(np.sum(mask[0:size]), size)
 
+    def test_lstm_works_with_transform(self):
+        stepfiles, audios, _ = sample_input()
+
+        dataset = loading.PumpItUpConvolutionLSTMOnsetDataset(stepfiles, audios, 20, loading.MaskAndPaddingTransform(20, skip=1))
+
+        for i in range(len(dataset)):
+            frames, diff, y, mask = dataset[i]
+
+            self.assertEqual(frames.shape, (20, 15, 3))
+            self.assertEqual(diff.shape, (25,))
+            self.assertEqual(y.shape, (20,))
+            self.assertEqual(mask.shape, (20,))
+
 
 
 def irange(a, b):
