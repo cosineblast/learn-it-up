@@ -1,3 +1,8 @@
+# loading.py:
+# This module contains the code responsible for
+# loading refined ssc files and audio feature files into the input formats
+# expected by the models.
+
 FRAMES_PER_SECOND = 100 
 
 from math import floor
@@ -12,11 +17,17 @@ import random
 
 from pathlib import Path
 
+"""
+A featureview is a tuple that represents a slice of the content of a features array.
+The real content starts at start, and ends at start+len, but it may be ok to access
+the array outside of this range, considering there might be padding.
+"""
 FeatureView = namedtuple('FeatureView', ['array', 'start', 'len'])
 
 
 CONTEXT_RADIUS=7
 
+# right now the cache is not really necessary since we store everything in memory during training anyway.
 class LoadFeaturesCached():
     """
     Loads features from disk applying padding and caching on paths.
@@ -39,7 +50,7 @@ class LoadFeaturesCached():
             return view
 
 def prepare_features(features, normalize=True):
-    """Adds 7 frames of padding before and after the feature, padded with minimum values of features,
+    """Adds 7 frames of padding before and after the given features, padded with minimum values of the given features,
        and normalizes features to mean 0 and standard deviation 1.
        Returns a feature view of the non-padded features. 
        """
@@ -70,6 +81,14 @@ def get_all_song_context_features(features_view, first_frame, last_frame, upshap
 
 
 class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
+    """
+    The dataset for the CNN onset model. 
+
+    Yields
+    - X: (15 x 80 x 3) np tensor containing the input frames
+    - Difficulty: (25,) np tensor containing the one-hot difficulty
+    - y: True or False depending on whether that frame is a step or not
+    """
     def __init__(self, stepfiles, all_features, transform=(lambda x:x)):
         self.inner = PumpItUpConvolutionLSTMOnsetDataset(stepfiles, all_features, 1)
         self.transform = transform
@@ -82,11 +101,23 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
 
         return self.transform((frames[0], difficulty, is_step[0]))
 
-ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
+_ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
 
 class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
+    """
+    The dataset for the C-LSTM onset model. 
 
+    Parameters:
+    - unroll_length: The ideal/maximum size of the returned sequences
+
+    Yields:
+    - X: (N x 15 x 80 x 3) np tensor containing the input frames, where 1 <= N <= UnrollLength
+    - Difficulty: (25,) np tensor containing the one-hot difficulty for the returned frames
+    - y: (N,) bool np tensor determining whether the frames are step or not
+    """
     def __init__(self, stepfiles, all_features, unroll_length, transform=(lambda x:x)):
+        # For more information on how data is stored in this class, see the LSTM selection model class
+
         def get_chart_stats(chart, stepfile_index):
             # these are inclusive
             first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
@@ -99,7 +130,10 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
             assert last_frame_index < all_features[stepfile_index].len
             assert first_frame_index < last_frame_index
 
-            return ChartBlockStats(len_frames // unroll_length + (len_frames % unroll_length != 0), first_frame_index, last_frame_index, stepfile_index)
+            return _ChartBlockStats(len_frames // unroll_length + (len_frames % unroll_length != 0),
+                                    first_frame_index,
+                                    last_frame_index,
+                                    stepfile_index)
 
         charts = [(chart, stepfile_index)
             for stepfile_index, stepfile in enumerate(stepfiles) for chart in stepfile.charts]
@@ -225,12 +259,29 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
         return self.transform((frames, difficulty, is_step))
 
 class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
+    """
+    The dataset for the LSTM selection model. 
+
+    Parameters:
+    - unroll_length: The ideal/maximum size of the returned sequences
+
+    Yields:
+    - X: (N x 5 x 4) np tensor containing the input steps
+    - Delta: (N x 3) np tensor containing step time related info
+    - y: (N,) integer np tensor containing the one-hot index of the next steps of the sequence
+    """
 
     def __init__(self, stepfiles, unroll_length, transform=(lambda x:x)):
-        # original ddc todo: "first sequence incredibly unlikely to appear, balance this"
-        # we solve this by sampling all blocks in an epoch. although this makes so that blocks
-        # will always be aligned by 100 steps to the start of the song, this means every block
-        # gets accessed once per epoch
+        # this class divides all the input chart steps into blocks of size UnrollLength and allows
+        # access to them by index.
+        # charts may have a number of steps that is not divisble by the unroll length, so the returned blocks
+        # may be shorter. that's when MaskAndPaddingTransform comes in handy
+        # this way, we solve a todo in the original ddc:
+        # "first sequence incredibly unlikely to appear, balance this"
+
+        # in order to locate the stepfile, chart and steps of the given block index, we store
+        # the prefix sum array of the block count of each file, and run a binary search to locate
+        # the right chart
 
         charts = [chart for stepfile in stepfiles for chart in stepfile.charts]
         chart_step_counts = [len(chart.steps) for chart in charts]
@@ -292,6 +343,14 @@ class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
         return self.transform(steps_to_model_input(chart.steps, start_index, end_index))
 
 def steps_to_model_input(steps, start_index, end_index):
+    """
+    Given a list of StepInfo values, this function  returns
+    the selection model bag-of-arrows np tensor input for the steps in the given range.
+
+    This function receives the start and end index and the whole step list, instead of just receiving
+    a slice list of the steps, because the returned model input contains information about next and previous steps,
+    so it needs to know whether it is dealing with the start of the chart or not.
+    """
     assert len(steps) >= 2
     x = np.stack([
         np.zeros((5, 4)) if i == 0 else

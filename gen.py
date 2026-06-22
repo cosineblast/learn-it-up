@@ -45,22 +45,7 @@ def generate_stepfile(audio_path,
         features = loader.load(audio_path)
 
     print("Loading onset model file {}...".format(onset_model_path), aae1)
-    onset_model_state = torch.load(onset_model_path, weights_only=False, map_location=torch.device(device))
-
-    if cnn_onset:
-        onset_model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True)
-    else:
-        onset_model = models.PumpItUpConvolutionLSTMOnset(channel_is_last=True)
-
-    onset_model.load_state_dict(onset_model_state)
-
-    if threshold_file is None:
-        thresholds = BEST_THRESHOLDS
-        print('Using default thresholds')
-    else:
-        with open(threshold_file) as f:
-            print('Using thresholds from given file')
-            thresholds = {int(key): value for key,value in json.load(f).items()}
+    onset_model, thresholds = load_onset_model(onset_model_path, threshold_file, cnn_onset, device)
 
     print()
 
@@ -99,6 +84,27 @@ aae2 = '([bold][purple]A[/purple][white]A[/white][green]E[/green]-'
 oaauua = '[purple]O[/purple]-[green]A[/green]-[red]A[/red]-[blue]U[/blue]-[yellow]U[/yellow]-[bright_magenta]A[/bright_magenta][/bold])'
 ee = '(Eeeee)'
 eeee = '[bold][green]E[/green][yellow]E[/yellow][bright_magenta]E[/bright_magenta][blue]E[/blue][red]E[/red][yellow]E[/yellow][green]E[/green][blue]E[/blue][/bold]'
+
+def load_onset_model(onset_model_path, threshold_file, cnn_onset, device):
+    import torch
+    import models
+    
+    onset_model_state = torch.load(onset_model_path, weights_only=False, map_location=torch.device(device))
+
+    if cnn_onset:
+        onset_model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True)
+    else:
+        onset_model = models.PumpItUpConvolutionLSTMOnset(channel_is_last=True)
+
+    onset_model.load_state_dict(onset_model_state)
+
+    if threshold_file is None:
+        thresholds = BEST_THRESHOLDS
+    else:
+        with open(threshold_file) as f:
+            thresholds = {int(key): value for key,value in json.load(f).items()}
+
+    return onset_model, thresholds
 
 def run_onset_model(features, onset_model, difficulty, thresholds, device):
     import torch
@@ -312,7 +318,15 @@ def main():
 
     args = parser.parse_args()
 
-    generate_stepfile(args.audio, args.difficulty, args.placement, args.selection, args.out, args.device, args.seed, args.cnn_onset, args.thresholds)
+    generate_stepfile(audio_path=args.audio,
+                      difficulty_str=args.difficulty,
+                      onset_model_path=args.placement,
+                      selection_model_path=args.selection,
+                      result_path=args.out,
+                      device=args.device,
+                      seed=args.seed,
+                      cnn_onset=args.cnn_onset,
+                      threshold_file=args.thresholds)
 
 def cli_parser():
     parser = argparse.ArgumentParser()
