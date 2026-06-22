@@ -81,7 +81,7 @@ class TestCNNDataset(unittest.TestCase):
             frames, difficulty, is_step = self.dataset[i]
 
             np.testing.assert_array_equal(frames1[0], frames)
-            np.testing.assert_array_equal(difficulty1[0], difficulty)
+            np.testing.assert_array_equal(difficulty1, difficulty)
             np.testing.assert_array_equal(is_step1[0], is_step)
         
 
@@ -121,8 +121,7 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
         for i in irange(0, 100):
             _, difficulty, _, = self.dataset[i]
 
-            self.assertEqual(difficulty.shape, (1, 25))
-            self.assertEqual(difficulty[0, 1], 1)
+            self.assertEqual(difficulty[1], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
     def test_steps_first_chart_ok(self):
@@ -149,8 +148,7 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
     def test_difficulty_second_chart_ok(self):
         for i in irange(101,301):
             _, difficulty, _ = self.dataset[i]
-            self.assertEqual(difficulty.shape, (1, 25))
-            self.assertEqual(difficulty[0, 7], 1)
+            self.assertEqual(difficulty[7], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
     def test_frames_second_chart_ok(self):
@@ -176,8 +174,7 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
     def test_difficulty_third_chart_ok(self):
         for i in irange(302, 792):
             _, difficulty, _ = self.dataset[i]
-            self.assertEqual(difficulty.shape, (1, 25))
-            self.assertEqual(difficulty[0, 11], 1)
+            self.assertEqual(difficulty[11], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
     def test_steps_third_chart_ok(self):
@@ -215,13 +212,12 @@ class TestLSTMOnsetDatasetUnrollN(unittest.TestCase):
             n = frames_block.shape[0]
 
             self.assertEqual(frames_block.shape, (n, 15, 3))
-            self.assertEqual(difficulty_block.shape, (n, 25))
             self.assertEqual(is_step_block.shape, (n,))
 
             for i in range(frames_block.shape[0]):
                 frames, difficulty, is_step = dataset1[base+i]
 
-                np.testing.assert_array_equal(difficulty_block[i].reshape((1, 25)), difficulty)
+                np.testing.assert_array_equal(difficulty_block, difficulty)
                 np.testing.assert_array_equal(is_step_block[i].reshape((1,)), is_step)
                 np.testing.assert_array_equal(frames_block[i].reshape((1, 15, 3)), frames)
 

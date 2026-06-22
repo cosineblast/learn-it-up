@@ -80,7 +80,7 @@ class PumpItUpConvolutionCNNOnsetDataset(torch.utils.data.Dataset):
     def __getitem__(self, target_index):
         frames, difficulty, is_step = self.inner[target_index]
 
-        return self.transform((frames[0], difficulty[0], is_step[0]))
+        return self.transform((frames[0], difficulty, is_step[0]))
 
 ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
 
@@ -202,8 +202,8 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
         frames = self._get_frame_context(file_features, block_first_frame, block_last_frame)
 
         block_length = block_last_frame - block_first_frame + 1
-        difficulty = np.zeros((block_length, 25))
-        difficulty[:, chart.difficulty-1] = 1.0
+        difficulty = np.zeros(25)
+        difficulty[chart.difficulty-1] = 1.0
 
         first_next_step = self._get_next_step_index(chart.steps, block_first_frame / FRAMES_PER_SECOND)
         last_next_step = self._get_next_step_index(chart.steps, block_last_frame / FRAMES_PER_SECOND)
