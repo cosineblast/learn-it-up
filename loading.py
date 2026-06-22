@@ -350,18 +350,20 @@ def index_to_stepcode(index):
     return ''.join(map(str, stepcode))
 
 def MaskAndPaddingTransform(unroll_length):
-    def maskAndPad(data):
-        x, delta, y = data
-
-        size    = x.shape[0]
+    """
+    This transform function takes a tuple containing multiple tensors X1, ..., Xn of
+    possibly different shapes, but all matching the size of their their main axis as `k` (X1.shape[0] = ... = Xn.shape[0] = k).
+    If k is less than the unroll length n, then all those vectors are padded with zeroes in their main axis to size n.
+    Additionally, an additional element `mask` is added to the returned tuple, containing a vector of shape (n,) with ones
+    in the first k positions, and zero in the last n-k positions.
+    """
+    def maskAndPad(stuff):
+        size    = stuff[0].shape[0]
         padding = unroll_length - size
 
-        x       = np.pad(x, [(0, padding), (0, 0), (0, 0)])
-        delta   = np.pad(delta, [(0, padding), (0, 0)])
-        y       = np.pad(y, [(0, padding)])
-
+        new_stuff = tuple(np.pad(x,[(0, padding)] + [(0, 0)] * (len(x.shape)-1)) for x in stuff)
         mask = np.pad(np.ones(size), (0, padding))
 
-        return x, delta, y, mask
+        return *new_stuff, mask
 
     return maskAndPad  

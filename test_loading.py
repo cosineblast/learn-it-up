@@ -223,6 +223,31 @@ class TestLSTMOnsetDatasetUnrollN(unittest.TestCase):
 
             base += frames_block.shape[0]
 
+from hypothesis import assume, given, strategies as st
+
+class TestMaskAndPaddingTransformWorks(unittest.TestCase):
+
+    @given(st.integers(1, 100), st.integers(1, 100))
+    def test_works_with_predefined_shape(self, unroll, size):
+        assume(unroll >= size)
+       
+        x = np.random.rand(size, 5, 4)
+        delta = np.random.rand(size, 3)
+        y = np.random.rand(size)
+
+        new_x, new_delta, new_y, mask = loading.MaskAndPaddingTransform(unroll)((x, delta, y))
+
+        self.assertEqual(new_x.shape, (unroll, 5, 4))
+        self.assertEqual(new_delta.shape, (unroll, 3))
+        self.assertEqual(new_y.shape,     (unroll,))
+        self.assertEqual(mask.shape,     (unroll,))
+
+        np.testing.assert_array_equal(new_x[0:size], x)
+        np.testing.assert_array_equal(delta[0:size], delta)
+        np.testing.assert_array_equal(y[0:size], y)
+
+        self.assertEqual(np.sum(mask[size:unroll]), 0)
+        self.assertEqual(np.sum(mask[0:size]), size)
 
 
 
