@@ -69,6 +69,9 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
         if self.channel_is_last:
             # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
             x = x.transpose(1, 3).transpose(2, 3)
+
+        assert x.shape[1:] == (3, 15, 80)
+        assert difficulty.shape[1:] == (25,)
             
         # Batch x 3 x 15 x 80
         convolved = self.convolution(x)

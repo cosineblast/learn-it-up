@@ -71,7 +71,12 @@ def _(loading, test_paths, training_paths, validation_paths):
 
 @app.cell
 def _(loading, training_features, training_stepfiles):
-    training_dataset = loading.PumpItUpConvolutionCNNOnsetDataset(training_stepfiles, training_features)
+    UNROLL_SIZE = 1
+
+    training_dataset = loading.PumpItUpConvolutionLSTMOnsetDataset(
+        training_stepfiles, training_features, 
+        UNROLL_SIZE#, transform=loading.MaskAndPaddingTransform(UNROLL_SIZE)
+    )
     len(training_dataset)
     return (training_dataset,)
 
@@ -120,7 +125,6 @@ def _(
         with mo.status.progress_bar(total=size, title='Training...', remove_on_exit=True) as bar:
 
             for batch, (frames, difficulties, y) in enumerate(training_loader):
-                # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
                 frames = frames.to(device)
                 difficulties = difficulties.float().to(device)
                 y = y.float().to(device)
