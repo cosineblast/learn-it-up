@@ -71,11 +71,11 @@ def _(loading, test_paths, training_paths, validation_paths):
 
 @app.cell
 def _(loading, training_features, training_stepfiles):
-    UNROLL_SIZE = 1
+    UNROLL_SIZE = 10
 
     training_dataset = loading.PumpItUpConvolutionLSTMOnsetDataset(
         training_stepfiles, training_features, 
-        UNROLL_SIZE#, transform=loading.MaskAndPaddingTransform(UNROLL_SIZE)
+        UNROLL_SIZE, transform=loading.MaskAndPaddingTransform(UNROLL_SIZE, skip=1)
     )
     len(training_dataset)
     return (training_dataset,)
@@ -91,14 +91,14 @@ def _(DataLoader, training_dataset):
 
 @app.cell
 def _(device, models):
-    model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True).float().to(device)
+    model = models.PumpItUpConvolutionLSTMOnset(channel_is_last=True).float().to(device)
     model
     return (model,)
 
 
 @app.cell
 def _(model, nn, torch):
-    loss_fn = nn.BCEWithLogitsLoss()
+    loss_fn = nn.BCEWithLogitsLoss(reduction='none')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     return loss_fn, optimizer
 
@@ -124,14 +124,20 @@ def _(
 
         with mo.status.progress_bar(total=size, title='Training...', remove_on_exit=True) as bar:
 
-            for batch, (frames, difficulties, y) in enumerate(training_loader):
+            for batch, (frames, difficulties, y, mask) in enumerate(training_loader):
                 frames = frames.to(device)
                 difficulties = difficulties.float().to(device)
                 y = y.float().to(device)
+                mask = mask.float().to(device)
 
                 pred = model(frames, difficulties)
 
-                loss = loss_fn(pred, y)
+                y = torch.flatten(y, start_dim=0, end_dim=1)
+                pred = torch.flatten(pred, start_dim=0, end_dim=1)
+                mask = torch.flatten(mask, start_dim=0, end_dim=1) 
+            
+                loss_per_batch = loss_fn(pred, y)
+                loss = torch.mean(loss_per_batch * mask)
 
                 # Backpropagation
                 loss.backward()

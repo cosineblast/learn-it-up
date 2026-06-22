@@ -99,8 +99,10 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
 # currently unused because of the different input tensor shape, for which we have not
 # yet implemented a dataset class for
 class PumpItUpConvolutionLSTMOnset(nn.Module):
-    def __init__(self):
+    def __init__(self, channel_is_last=False):
         super().__init__()
+
+        self.channel_is_last = channel_is_last
 
         # Input: 
         # - X: (Batch x UnrollLength x 3 x 15 x 80) 
@@ -154,6 +156,10 @@ class PumpItUpConvolutionLSTMOnset(nn.Module):
         )
 
     def forward(self, x, difficulty):
+        if self.channel_is_last:
+            # (Batch, Unroll, 15, 80, 3) -> (Batch, Unroll, 3, 15, 80)
+            x = x.transpose(2, 4).transpose(3, 4)
+
         assert len(x.shape) == 5
 
         batch = x.shape[0]

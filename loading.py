@@ -358,6 +358,8 @@ def MaskAndPaddingTransform(unroll_length, skip=None):
     in the first k positions, and zero in the last n-k positions.
     """
     def maskAndPad(stuff):
+        assert isinstance(stuff, tuple)
+
         size    = stuff[0].shape[0]
 
         new_stuff = tuple(
