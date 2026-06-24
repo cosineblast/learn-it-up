@@ -33,9 +33,11 @@
 
 import msdparser
 import itertools
-import time
 import typing
 import pickle
+
+import numpy as np
+import scipy.stats
 
 from fractions import Fraction
 from math import floor
@@ -374,20 +376,37 @@ def _compute_beat_times(offset, bpms, beat_count) -> list[tuple[float, float]]:
     return result
 
 def _compute_beat_bpms(bpms, beat_count) -> list[tuple[float, float]]:
-    """Returns a list with the bpm at the start of each beat"""
+    """Returns a list with the average BPM of each beat of the chart.
+     The average BPM is computed as the harmonic mean of the BPM of each beat segment
+     """
 
     result = []
 
     assert len(bpms) >= 1
 
     def get_bpm(beat):
-        for bpm_beat, bpm_value in bpms:
-            if beat + _EPSILON >= bpm_beat:
-                return bpm_value
-        return bpms[-1][1]
+        beat_bpm = None
+        for segment_start, segment_bpm in reversed(bpms):
+            if beat >= segment_start:
+                beat_bpm = segment_bpm
+                break
+        assert beat_bpm is not None
 
-    # TODO: optimize this 
+        bpms_in_range = [(beat, beat_bpm)] + [(time, bpm) for (time, bpm) in bpms if beat < time < beat + 1]
+        return find_average_bpm(bpms_in_range, beat+1)
+
     return [get_bpm(beat) for beat in range(beat_count)]
+
+def find_average_bpm(bpms, last_beat):
+    """
+    Given a list of pairs bpms containing the BPM segment starts and segment BPMs, and the last beat of the last segment,
+    computes the average BPM of the whole segment, using harmonic mean.
+    """
+
+    bpms = np.array(bpms)
+    bpms = bpms[bpms[:, 0] < last_beat]
+    durations = np.append(bpms[1:, 0], last_beat) - bpms[:, 0]
+    return scipy.stats.hmean(bpms[:, 1], weights=durations)
 
 
 def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count):
@@ -428,6 +447,7 @@ def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count):
 
     return result
 
+# i dont exactly know why DDC and DDCL use this, but i'm keeping it
 _EPSILON = 1e-6
 
 
