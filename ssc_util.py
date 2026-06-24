@@ -88,6 +88,8 @@ class StepInfo(NamedTuple):
 class RefinedChart(NamedTuple):
     steps: list[StepInfo]
     offset: float
+    avg_bpm: float
+    nps: float
     bpms: list[tuple[float, float]]
     description: str
     difficulty: int
@@ -274,6 +276,8 @@ def refine_chart(chart: Chart) -> RefinedChart:
     return RefinedChart(
         steps=refined_steps,
         offset=chart.OFFSET,
+        avg_bpm=find_average_bpm(chart.BPMS, float(refined_steps[-1].time_in_beats)),
+        nps=len(refined_steps)/(refined_steps[-1].time_in_seconds - refined_steps[0].time_in_seconds),
         bpms=chart.BPMS,
         description=chart.DESCRIPTION,
         difficulty=_get_difficulty(chart.DESCRIPTION),

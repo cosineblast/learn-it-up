@@ -95,9 +95,6 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
             return output
 
 
-# unused for now, cnn alone gives us ok performance, we will try this in the future.
-# currently unused because of the different input tensor shape, for which we have not
-# yet implemented a dataset class for
 class PumpItUpConvolutionLSTMOnset(nn.Module):
     def __init__(self, channel_is_last=False):
         super().__init__()
@@ -284,4 +281,126 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
             return final_layer, state
         else:
             return final_layer
+
+
+
+class PumpPumpConvolutionAlignedOnset(nn.Module):
+    def __init__(self, rnn_size=200):
+        super().__init__()
+
+
+        self.convolution = nn.Sequential(
+            nn.Conv2d(
+                in_channels=3,
+                out_channels=10,
+                kernel_size=(7,3)
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(3, 3)),
+            nn.Conv2d(
+                in_channels=10,
+                out_channels=20,
+                kernel_size=(7,3)
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(3, 3)),
+        )
+
+        extra_features = 2
+        cnn_output_len_flattened = 2400
+
+        self.rnn_projection = nn.Linear(
+            in_features=cnn_output_len_flattened+extra_features,
+            out_features=rnn_size
+        )
+
+        self.lstm = nn.LSTM(
+            input_size=rnn_size,
+            hidden_size=rnn_size,
+            num_layers=2,
+            batch_first=True,
+            dropout=0.5
+        )
+
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=rnn_size, out_features=256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(in_features=256, out_features=128),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(in_features=128, out_features=48)
+        )
+
+
+    def forward(self, x, nps, bpms):
+        """
+        INPUT:
+        x:    (Batch x Unroll x 5 x 32 x 80 x 3) 5 beats of the song, 2 before, 2 after, 32 samples per beat
+        nps:  (Batch) target nps of the song, normalized to zero mean, 1 variance
+        bpms: (Batch x Unroll) the bpms of each batch segment
+
+        OUTPUT:
+        y: (Batch x Unroll x 48) sigmoids with activations for the beat
+        """
+
+        # (Batch x Unroll x 5 x 32 x 80 x 3) ->  (Batch x Unroll x 160 x 80 x 3)
+        x = torch.flatten(x, start_dim=2, end_dim=3)
+        # (Batch, Unroll, 160, 80, 3) -> (Batch, Unroll, 3, 160, 80)
+        x = x.transpose(2, 4).transpose(3, 4)
+
+        assert len(x.shape) == 5
+
+        batch = x.shape[0]
+        unroll = x.shape[1]
+        assert x.shape[2] == 3
+        assert x.shape[3] == 160
+        assert x.shape[4] == 80
+
+        assert nps.shape == (batch,)
+        assert bpms.shape == (batch, unroll)
+
+        #     Batch x UnrollLength  x 3 x 160 x 80
+
+        _x = torch.flatten(x, start_dim=0, end_dim=1)
+        # -> (Batch * UnrollLength) x 3 x 160 x 80
+
+        _convolved = self.convolution(_x)
+        # -> (Batch * UnrollLength) x K x T x F
+        # (K, T, F) = (Kernel, Time, Frequency)
+
+        convolved = torch.unflatten(_convolved, 0, (batch, unroll))
+        # -> Batch x UnrollLength x K x T x F
+
+        flattened = torch.flatten(convolved, start_dim=2)
+        # -> Batch x UnrollLength x (K * T * F)
+
+        # nps: (Batch) 
+        repeated_nps = torch.reshape(nps, (batch, 1, 1)).repeat((1, unroll, 1))
+        # -> (Batch x Unroll x 1)
+
+        # bpms: (Batch x Unroll) 
+        bpms_reshaped = torch.reshape(bpms, (batch, unroll, 1))
+        # -> (Batch x Unroll x 1) 
+
+        # x: Batch x UnrollLength x (K * T * F)
+        with_info = torch.concat([flattened, repeated_nps, bpms_reshaped], dim=2)
+        # -> Batch x UnrollLength x (K * T * F + 2)
+
+        projected = self.rnn_projection(with_info)
+        # -> Batch x UnrollLength x RNNSize
+
+        after_lstm, _ = self.lstm(projected)
+        # -> Batch x UnrollLength x RNNSize
+
+        _after_lstm = torch.flatten(after_lstm, start_dim=0, end_dim=1)
+        # -> (Batch * UnrollLength) x RNNSize
+        
+        _linear_result = self.mlp(_after_lstm)
+        # -> (Batch * UnrollLength) x 48
+
+        linear_result = torch.reshape(_linear_result, (batch, unroll, 48))
+        # -> Batch x UnrollLength
+
+        return linear_result
         

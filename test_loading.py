@@ -18,7 +18,8 @@ def chart_of(steps, diff=16):
         description=f'S{diff}',
         difficulty=diff,
         credit='UNKNOWN',
-
+        avg_bpm=120.0,
+        nps=5.0,
         bpms=[],
         beat_start_end_times=[],
         beat_bpms=[],

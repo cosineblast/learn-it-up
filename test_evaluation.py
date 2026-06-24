@@ -24,6 +24,8 @@ class TestEvaluationWorks(unittest.TestCase):
                 description=f'S{diff}',
                 difficulty=diff,
                 credit='UNKNOWN',
+                avg_bpm=120.0,
+                nps=5.0,
 
                 bpms=[],
                 beat_start_end_times=[],

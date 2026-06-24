@@ -17,6 +17,8 @@ import random
 
 from pathlib import Path
 
+import audio_util
+
 """
 A featureview is a tuple that represents a slice of the content of a features array.
 The real content starts at start, and ends at start+len, but it may be ok to access
@@ -155,27 +157,7 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
         return self.len_blocks
 
     def _get_target_chart_index(self, target_index):
-        if target_index < self.chart_len_sums[0]:
-            return 0, 0
-
-        l = 0
-        r = len(self.chart_len_sums)-1
-
-        assert not (target_index < self.chart_len_sums[l])
-        assert target_index < self.chart_len_sums[r]
-
-        while l+1 != r:
-            m = (l + r) // 2
-
-            if target_index < self.chart_len_sums[m]:
-                r = m
-            else:
-                l = m
-
-        assert not (target_index < self.chart_len_sums[l])
-        assert target_index < self.chart_len_sums[r]
-
-        return r, self.chart_len_sums[l]
+        return _binary_search_index(self.chart_len_sums, target_index)
 
     def _get_frame_context(self, view, first_frame, last_frame):
         array, start, length = view
@@ -258,6 +240,115 @@ class PumpItUpConvolutionLSTMOnsetDataset(torch.utils.data.Dataset):
         
         return self.transform((frames, difficulty, is_step))
 
+class PumpItUpConvolutionAlignedOnsetDataset(torch.utils.data.Dataset):
+    """
+    The dataset for the aligned C-LSTM onset model. 
+
+    Parameters:
+    - unroll_length: The ideal/maximum size of the returned sequences
+
+    Yields:
+    - X: (N x 5 x 32 x 80 x 3) numpy tensor containing the input beat frames, where 1 <= N <= UnrollLength
+    - NPS: target nps of the song, normalized to zero mean, 1 variance over all the stepfiles
+    - BPMS: (N x 48) the bpms of each batch segment, normalized to zero mean 1 variance over all the stepfiles
+    - y: (N x 48) bool np tensor with the onsets for the given beats
+    """
+    def __init__(self, stepfiles, all_features, unroll_length, transform=(lambda x:x)):
+        def get_chart_block_count(chart):
+            first_beat_index = 0
+            last_beat_index = floor(chart.steps[-1].time_in_beats)
+
+            len_beats = last_beat_index - first_beat_index + 1
+
+            assert len(chart.steps) >= 2
+            assert first_beat_index <= last_beat_index
+
+            return len_beats // unroll_length + (len_beats % unroll_length != 0)
+
+        charts = [(chart, stepfile_index)
+            for stepfile_index, stepfile in enumerate(stepfiles) for chart in stepfile.charts]
+
+        block_counts = [get_chart_block_count(chart) for chart,_ in charts]
+
+        self.charts_and_stepfiles = charts
+        self.len_blocks = sum(block_counts) 
+        self.all_features = all_features 
+        self.stepfiles = stepfiles
+        self.chart_len_sums = list(itertools.accumulate(block_counts))
+        self.transform = transform
+        self.unroll_length = unroll_length
+        self.bpm_mean, self.bpm_std, self.nps_mean, self.nps_std = _find_average_bpm_nps(stepfiles)
+
+    def __len__(self):
+        return self.len_blocks
+
+    def _get_target_chart_index(self, target_index):
+        return _binary_search_index(self.chart_len_sums, target_index)
+
+    def _get_beat_context(self, chart, view, first_beat, last_beat):
+        array, start, length = view
+
+        slice = array[start:start+length]
+        resampled = audio_util.resample_features(slice, chart.beat_start_end_times)
+
+        default_value = np.min(slice, axis=0)
+        padding = np.tile(default_value.reshape((1, 1, 80, 3)), (2, 32, 1, 1))
+        padded = np.concat([padding, resampled, padding])
+        offset = 2
+       
+        result = []
+        for beat_index in range(first_beat, last_beat+1):
+            a = beat_index - 2
+            b = beat_index + 2 +1
+            result.append(padded[a+offset:b+offset])
+
+        return np.stack(result)
+
+    def __getitem__(self, target_index):
+        assert isinstance(target_index, int)
+        assert target_index < len(self)
+
+        chart_index, total_blocks_before_chart = self._get_target_chart_index(target_index)
+
+        chart, stepfile_index = self.charts_and_stepfiles[chart_index]
+        features = self.all_features[stepfile_index]
+
+        chart_first_beat = 0
+        chart_last_beat = floor(chart.steps[-1].time_in_beats)
+
+        block_index = target_index - total_blocks_before_chart
+
+        block_first_beat = block_index * self.unroll_length + chart_first_beat
+        block_last_beat = block_first_beat + self.unroll_length-1
+        block_last_beat = min(block_last_beat, chart_last_beat)
+
+        beat_frames = self._get_beat_context(chart, features, block_first_beat, block_last_beat)
+
+        block_length = block_last_beat - block_first_beat + 1
+
+        nps = chart.nps
+        nps = (nps - self.nps_mean) / self.nps_std
+
+        bpms = np.array(chart.beat_bpms[block_first_beat:block_last_beat+1])
+        bpms = (bpms - self.bpm_mean) / self.bpm_std
+
+        onsets = np.array(chart.beat_onset_vectors[block_first_beat:block_last_beat+1], dtype=bool)
+        
+        return self.transform((beat_frames, nps, bpms, onsets))
+
+def _find_average_bpm_nps(stepfiles):
+    bpms = [chart.avg_bpm for file in stepfiles for chart in file.charts]
+    bpm_mean = np.mean(bpms)
+    bpm_std = np.std(bpms)
+    bpm_std = 1 if bpm_std == 0 else bpm_std
+
+    npss = [chart.nps for file in stepfiles for chart in file.charts]
+    nps_mean = np.mean(npss)
+    nps_std = np.std(npss)
+    nps_std = 1 if nps_std == 0 else nps_std
+
+    return bpm_mean, bpm_std, nps_mean, nps_std
+
 class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
     """
     The dataset for the LSTM selection model. 
@@ -301,27 +392,7 @@ class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
         return self.len_blocks
 
     def _get_target_chart_index(self, target_index):
-        if target_index < self.chart_block_counts_sum[0]:
-            return 0, 0
-
-        l = 0
-        r = len(self.chart_block_counts_sum)-1
-
-        assert not (target_index < self.chart_block_counts_sum[l])
-        assert target_index < self.chart_block_counts_sum[r]
-
-        while l+1 != r:
-            m = (l + r) // 2
-
-            if target_index < self.chart_block_counts_sum[m]:
-                r = m
-            else:
-                l = m
-
-        assert not (target_index < self.chart_block_counts_sum[l])
-        assert target_index < self.chart_block_counts_sum[r]
-
-        return r, self.chart_block_counts_sum[l]
+        return _binary_search_index(self.chart_block_counts_sum, target_index)
 
     def __getitem__(self, target_index):
         assert isinstance(target_index, int)
@@ -341,6 +412,36 @@ class PumpItUpConvolutionSelectionLSTMDataset(torch.utils.data.Dataset):
         end_index = start_index + len(block)
 
         return self.transform(steps_to_model_input(chart.steps, start_index, end_index))
+
+def _binary_search_index(sums, target_index):
+    """
+    Given the prefix sum of an array A of items, returns the index of the
+    first item such that target < prefix_sum item.
+    It also returns the sum of the items before the returned one, so prefix_sum (item-1)
+    """
+    if target_index < sums[0]:
+        return 0, 0
+
+    l = 0
+    r = len(sums)-1
+
+    assert not (target_index < sums[l])
+    assert target_index < sums[r]
+
+    while l+1 != r:
+        m = (l + r) // 2
+
+        if target_index < sums[m]:
+            r = m
+        else:
+            l = m
+
+    assert not (target_index < sums[l])
+    assert target_index < sums[r]
+
+    return r, sums[l]
+
+    
 
 def steps_to_model_input(steps, start_index, end_index):
     """
