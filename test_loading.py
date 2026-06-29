@@ -262,6 +262,62 @@ class TestMaskAndPaddingTransformWorks(unittest.TestCase):
             self.assertEqual(y.shape, (20,))
             self.assertEqual(mask.shape, (20,))
 
+import ssc_util
+import models.ppc
+import torch
+
+class TestAlignedPPCDataset(unittest.TestCase):
+
+
+    def setUp(self):
+        audio = np.zeros((3, 80, 450)) + np.arange(450)
+        audio = audio.transpose((2, 1, 0))
+        audio_len = audio.shape[0]
+
+        padding = np.ones((64, 80, 3)) * DEFAULT_VALUE
+        padded_audio = np.concat([padding, audio, padding])
+
+        self.audio_view = loading.FeatureView(padded_audio, 64, audio_len) 
+
+        raw_chart = ssc_util.Chart(
+            NOTES = [
+                [ '10000', '00100', '01000', '00100' ],
+                [ '10000', '10000',
+                  '00100', '00100',
+                  '01000', '01000',
+                  '00100', '00100'
+              ],
+            ],
+            OFFSET = 0.0,
+            BPMS = [(0.0, 120.0)],
+            DESCRIPTION = 'S11',
+            CREDIT = 'test',
+            TIMESIGNATURES = [(0.0, 4.0, 4.0)],
+            STOPS = [],
+            DELAYS = [],
+            WARPS = [],
+            FAKES = [],
+        )
+
+        self.chart = ssc_util.refine_chart(raw_chart)
+
+    def test_is_compatible_with_model(self):
+        stepfiles = [stepfile_of([self.chart])]
+        features = [self.audio_view]
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2)
+
+        x, nps, bpm, y = dataset[0]
+        
+        model = models.ppc.PumpPumpConvolutionAlignedOnset()
+
+        with torch.no_grad():
+            x = torch.tensor(x).float()[None, :]
+            nps = torch.tensor([nps]).float()
+            bpm = torch.tensor(bpm).float()[None, :]
+
+        y = model(x, nps, bpm)
+
+        self.assertEqual(y.shape, (x.shape[0], x.shape[1], 48))
 
 
 def irange(a, b):
