@@ -25,7 +25,7 @@ class PPC_CNNOnsetDataset(torch.utils.data.Dataset):
     - y: True or False depending on whether that frame is a step or not
     """
     def __init__(self, stepfiles, all_features, transform=(lambda x:x)):
-        self.inner = LSTMOnsetDataset(stepfiles, all_features, 1)
+        self.inner = PPC_LSTMOnsetDataset(stepfiles, all_features, 1)
         self.transform = transform
 
     def __len__(self):
