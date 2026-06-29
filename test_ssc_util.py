@@ -9,11 +9,18 @@ def st_beats():
     return st.floats(0.0, 100.0)
 def st_bpms():
     return st.floats(1.0, 240.0)
-def st_bpm_pairs():
-    return st.lists(
-        st.tuples(st_beats(), st_bpms()),
-        min_size=1
-    ).map(lambda xs: sorted(xs, key=itemgetter(0)))
+
+@st.composite
+def st_bpm_pairs(draw, *, start_at_zero=False):
+    stuff = draw(st.lists(st.tuples(st_beats(), st_bpms()), min_size=1)) 
+
+    if start_at_zero:
+        stuff.append((0, min(stuff, key=itemgetter(0))[1]))
+
+    stuff.sort(key=itemgetter(0))
+    
+    return stuff
+
     
 
 EPS = 0.001
@@ -68,16 +75,11 @@ class TestSSCUtil(unittest.TestCase):
         self.assertLessEqual(old_avg, new_avg)
         self.assertLessEqual(new_avg, old_avg + old_avg/100 + EPS)
 
-    @given(st_bpm_pairs(), st.floats(1.0, 100.0))
+    @given(st_bpm_pairs(start_at_zero=True), st.floats(1.0, 100.0))
     def test_average_bpm_has_same_time_as_original(self, pairs, end_offset):
         beats, bpms = zip(*pairs)
         beats = list(beats)
         bpms = list(bpms)
-
-        if beats[0] != 0.0:
-            beats = [0.0] + beats
-            bpms = [bpms[0]] + bpms
-            pairs = list(zip(beats, bpms))
 
         next_beat = max(beats)+end_offset
 
