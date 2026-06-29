@@ -75,7 +75,8 @@ def _(loading, training_features, training_stepfiles):
 
     training_dataset = loading.ppc.PPC_AlignedOnsetDataset(
         training_stepfiles, training_features, 
-        UNROLL_SIZE#, transform=loading.MaskAndPaddingTransform(UNROLL_SIZE, skip=1)
+        UNROLL_SIZE, 
+        transform=loading.MaskAndPaddingTransform(UNROLL_SIZE, skip=1)
     )
     len(training_dataset)
     return (training_dataset,)
@@ -144,20 +145,22 @@ def _(
 
         with mo.status.progress_bar(total=size, title='Training...', remove_on_exit=True) as bar:
 
-            for batch, (frames, difficulties, y, mask) in enumerate(training_loader):
-                frames = frames.to(device)
-                difficulties = difficulties.float().to(device)
-                y = y.float().to(device)
-                mask = mask.float().to(device)
+            for batch, (x, nps, bpms, y, mask) in enumerate(training_loader):
+                x = x.to(device) # (batch x unroll x 5 32 x 80 x 3)
+                nps = nps.float().to(device) # (batch)
+                bpms = bpms.float().to(device) # (batch x unroll)
+                y = y.float().to(device) # (batch x unroll x 48)
+                mask = mask.float().to(device) # (batch x unroll)
 
-                pred = model(frames, difficulties)
+                pred = model(x, nps, bpms)
 
                 y = torch.flatten(y, start_dim=0, end_dim=1)
                 pred = torch.flatten(pred, start_dim=0, end_dim=1)
-                mask = torch.flatten(mask, start_dim=0, end_dim=1) 
+                mask = torch.flatten(mask, start_dim=0, end_dim=1)  # (batch * unroll)
 
-                loss_per_batch = loss_fn(pred, y)
-                loss = torch.mean(loss_per_batch * mask)
+                loss_per_batch = loss_fn(pred, y) # (batch * unroll x 48)
+
+                loss = torch.mean(loss_per_batch.transpose(0, 1) * mask)
 
                 # Backpropagation
                 loss.backward()
@@ -166,8 +169,7 @@ def _(
                 optimizer.step()
                 optimizer.zero_grad()
 
-                if batch % 100 == 0:
-                    bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
+                bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
 
     return (train_epoch,)
@@ -284,7 +286,7 @@ def _(
             for stepfile, features in zip(stepfiles, file_features):
 
                 for chart in stepfile.charts:
-                    result = evaluation.measure_onset_performance(model, chart, features, loss_fn, device)
+                    result = evaluation.measure_aligned_onset_performance(model, chart, features, loss_fn, device)
 
                     sum_precision += result.precision 
                     sum_recall    += result.recall 
@@ -385,7 +387,7 @@ def _(sample_aligned_model, sample_aligned_x, sample_bpms, sample_nps):
 
 @app.cell
 def _(device, torch, training_dataset):
-    thing_x, thing_nps, thing_bpms, thign_y = training_dataset[0]
+    thing_x, thing_nps, thing_bpms, thign_y, _mask = training_dataset[0]
 
     thing_x = torch.tensor(thing_x[None, :]).float().to(device)
     thing_nps = torch.tensor([thing_nps]).float().to(device)

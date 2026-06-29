@@ -201,17 +201,16 @@ def measure_aligned_onset_performance(model, chart, features, loss_fn, device):
         beat_scores = F.sigmoid(log_scores[0]).detach().cpu().numpy()
         mean_loss = torch.mean(loss).detach().cpu().numpy()
 
-    frame_limit = floor(chart.beat_start_end_times[-1][1] * FRAMES_PER_SECOND)
-
-    frame_scores = beat_scores_to_frame_scores(chart, beat_scores)[:frame_limit]
-    frame_ys = beat_scores_to_frame_scores(chart, ys)[:frame_limit]
+    frame_scores = beat_scores_to_frame_scores(chart, beat_scores, frame_count=features.len)
     
     real_onsets = set(frame_of(step) for step in chart.steps)
 
-    return evaluate_frame_onset_performance(real_onsets, frame_scores, frame_ys, mean_loss)
-    # computing main metrics 
+    frame_ys = np.zeros(features.len)
+    frame_ys[list(real_onsets)] = True
 
-def beat_scores_to_frame_scores(chart, beat_scores):
+    return evaluate_frame_onset_performance(real_onsets, frame_scores, frame_ys, mean_loss)
+
+def beat_scores_to_frame_scores(chart, beat_scores, frame_count):
     beat_count = beat_scores.shape[0]
 
     beat_fractions = [i/48 for i in range(beat_count * 48)]
@@ -232,8 +231,10 @@ def beat_scores_to_frame_scores(chart, beat_scores):
             frame = floor(time * FRAMES_PER_SECOND)
             frame_scores[frame] = max(frame_scores[frame], score)
 
-    result = [frame_scores[i] for i in range(len(frame_scores))]
-    return np.array(result)
+    result = np.zeros(frame_count)
+    for i in range(len(frame_scores)):
+        result[i] = frame_scores[i]
+    return result
 
 
         
