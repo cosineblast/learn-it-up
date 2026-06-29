@@ -368,13 +368,31 @@ def _compute_beat_absolute_time(offset, bpms, segment_durations, beat):
     # so we have to subtract the offset.
     return time_before_this_segment + time_since_start_of_this_segment - offset
 
-def _compute_beats_absolute_times(offset, bpms, beats):
-    """Computes the absolute time of multiple beats in seconds"""
+def compute_multiple_beats_absolute_times(offset, bpms, beats):
+    """Computes the absolute time in seconds of multiple sorted beats.
+    Equivalent to _compute_beat_absolute_time for each beat"""
 
     segment_durations = _compute_segment_durations(bpms)
+    segment_durations_sum = list(itertools.accumulate(segment_durations))
 
-    return [_compute_beat_absolute_time(offset, bpms, segments, beat) for beat in beats]
+    result = []
 
+    i = 0
+    for beat in beats:
+        while i < len(bpms) and beat + _EPSILON > bpms[i][0]:
+            i += 1
+        segment_index = i-1
+
+        segment_start, bpm = bpms[segment_index]
+
+        time_before_this_segment = 0 if segment_index == 0 else segment_durations_sum[segment_index-1]
+        this_segment_spb = _bpm_to_spb(bpm)
+        time_since_start_of_this_segment = this_segment_spb * (beat - segment_start)
+
+        thing = time_before_this_segment + time_since_start_of_this_segment - offset
+        result.append(thing)
+
+    return result
 
 def _compute_beat_times(offset, bpms, beat_count) -> list[tuple[float, float]]:
     """Returns a list of tuples (start, end) with the start and end times of the given beat in seconds"""

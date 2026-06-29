@@ -1,7 +1,9 @@
 import unittest
 import ssc_util
 
-from hypothesis import given, strategies as st, assume
+import numpy as np
+
+from hypothesis import given, strategies as st, assume, example
 
 from operator import itemgetter
 
@@ -15,7 +17,11 @@ def st_bpm_pairs(draw, *, start_at_zero=False):
     stuff = draw(st.lists(st.tuples(st_beats(), st_bpms()), min_size=1)) 
 
     if start_at_zero:
-        stuff.append((0, min(stuff, key=itemgetter(0))[1]))
+        min_entry = min(stuff, key=itemgetter(0))
+        if min_entry[0] != 0.0:
+            stuff.append((0.0, min_entry[1]))
+
+    stuff = list({pair[0]: pair for pair in stuff}.values())
 
     stuff.sort(key=itemgetter(0))
     
@@ -92,6 +98,21 @@ class TestSSCUtil(unittest.TestCase):
         self.assertAlmostEqual(full_duration, 60/result * next_beat, delta=EPS)
 
 
+    @given(st_bpm_pairs(start_at_zero=True), st.lists(st.floats(0.0, 1.0)).map(sorted), st.floats(-2.0, 2.0))
+    def test_compute_multiple_beats_works(self, pairs, target_ratios, offset):
+        beats, bpms = zip(*pairs)
+        beats = list(beats)
+        bpms = list(bpms)
+
+        target_beats = [max(beats) * ratio for ratio in target_ratios]
+
+        segments = ssc_util._compute_segment_durations(pairs)
+
+        expected_times = [ssc_util._compute_beat_absolute_time(offset, pairs, segments, beat) for beat in target_beats]
+
+        computed_times = ssc_util.compute_multiple_beats_absolute_times(offset, pairs, target_beats)
+
+        np.testing.assert_array_almost_equal(np.array(expected_times), np.array(computed_times))
         
 
 
