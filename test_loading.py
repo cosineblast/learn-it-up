@@ -70,8 +70,8 @@ class TestCNNDataset(unittest.TestCase):
 
     def test_all_ok(self):
         stepfiles, audios, _ = sample_input()
-        self.dataset = loading.ppc.CNNOnsetDataset(stepfiles, audios) 
-        self.dataset1 = loading.ppc.LSTMOnsetDataset(stepfiles, audios, 1)
+        self.dataset = loading.ppc.PPC_CNNOnsetDataset(stepfiles, audios) 
+        self.dataset1 = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 1)
         
         assert len(self.dataset) == len(self.dataset1)
 
@@ -91,7 +91,7 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
     def setUp(self):
         stepfiles, audios, audio = sample_input()
 
-        self.dataset = loading.ppc.LSTMOnsetDataset(stepfiles, audios, 1)
+        self.dataset = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 1)
         self.audio = audio
 
     def context_around(self, i):
@@ -201,8 +201,8 @@ class TestLSTMOnsetDatasetUnrollN(unittest.TestCase):
     def test_all_ok(self):
         stepfiles, audios, _ = sample_input()
         
-        dataset1 = loading.ppc.LSTMOnsetDataset(stepfiles, audios, 1)
-        dataset_block = loading.ppc.LSTMOnsetDataset(stepfiles, audios, 20)
+        dataset1 = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 1)
+        dataset_block = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 20)
 
         base = 0
         for block_index in range(len(dataset_block)):
@@ -252,7 +252,7 @@ class TestMaskAndPaddingTransformWorks(unittest.TestCase):
     def test_lstm_works_with_transform(self):
         stepfiles, audios, _ = sample_input()
 
-        dataset = loading.ppc.LSTMOnsetDataset(stepfiles, audios, 20, loading.MaskAndPaddingTransform(20, skip=1))
+        dataset = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 20, loading.MaskAndPaddingTransform(20, skip=1))
 
         for i in range(len(dataset)):
             frames, diff, y, mask = dataset[i]
