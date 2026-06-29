@@ -1,5 +1,3 @@
-import essentia
-from essentia.standard import MonoLoader, FrameGenerator, Windowing, Spectrum, MelBands
 import numpy as np
 import functools
 
@@ -7,6 +5,7 @@ import rich.progress
 
 
 class AudioFeatureLoader:
+
     def __init__(
         self,
         sample_rate=44100.0,
@@ -33,6 +32,8 @@ class AudioFeatureLoader:
     # A pipeline is a sequence of functions that should be applied to each frame
     # This function returns the pipelines for the different window sizes
     def _create_pipelines(self):
+        from essentia.standard import Windowing, Spectrum, MelBands
+
         pipelines = []
 
         for window_size in self.window_sizes:
@@ -57,6 +58,8 @@ class AudioFeatureLoader:
         return pipelines
 
     def load(self, audio_path):
+        from essentia.standard import MonoLoader, FrameGenerator
+
         loader = MonoLoader(filename=audio_path, sampleRate=self.sample_rate)
         samples = loader()
 
