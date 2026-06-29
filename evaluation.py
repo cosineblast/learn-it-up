@@ -62,33 +62,12 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
         scores = scores.flatten()
         ys = ys.flatten()
 
-        
 
     # analyzing onsets 
 
-    pred_onsets = _get_pred_onsets(scores)
     real_onsets = set(step_onsets)
 
-    # computing main metrics 
-
-    raw_precisions, raw_recalls, _ = sklearn.metrics.precision_recall_curve(ys, scores)
-    raw_auc_score = sklearn.metrics.auc(raw_recalls, raw_precisions)
-
-    aligned_scores = ddc_align_scores_for_sklearn(real_onsets, pred_onsets, scores)
-
-    precisions, recalls, thresholds = sklearn.metrics.precision_recall_curve(ys, aligned_scores)
-    aligned_auc_score = sklearn.metrics.auc(recalls, precisions)
-
-    precision, recall, fscore, threshold_ideal = get_best_metrics(precisions, recalls, thresholds)
-
-    # computing accuracy
-
-    predicted_steps = np.where(aligned_scores >= threshold_ideal)
-    y_labels = np.zeros(aligned_scores.shape[0], dtype=int)
-    y_labels[predicted_steps] = 1
-    accuracy = sklearn.metrics.accuracy_score(ys.astype(int), y_labels)
-
-    return OnsetEvaluation(precision, recall, fscore, mean_loss, threshold_ideal, raw_auc_score, aligned_auc_score, accuracy)
+    return evaluate_frame_onset_performance(real_onsets, scores, ys, mean_loss)
 
 def get_best_metrics(precisions, recalls, thresholds):
     fscores_denom = precisions + recalls
@@ -206,3 +185,27 @@ def measure_selection_performance(model, chart, loss_fn, device):
 
 
     
+
+
+def evaluate_frame_onset_performance(real_onsets, scores, ys, mean_loss):
+    pred_onsets = _get_pred_onsets(scores)
+
+    raw_precisions, raw_recalls, _ = sklearn.metrics.precision_recall_curve(ys, scores)
+    raw_auc_score = sklearn.metrics.auc(raw_recalls, raw_precisions)
+
+    aligned_scores = ddc_align_scores_for_sklearn(real_onsets, pred_onsets, scores)
+
+    precisions, recalls, thresholds = sklearn.metrics.precision_recall_curve(ys, aligned_scores)
+    aligned_auc_score = sklearn.metrics.auc(recalls, precisions)
+
+    precision, recall, fscore, threshold_ideal = get_best_metrics(precisions, recalls, thresholds)
+
+    # computing accuracy
+
+    predicted_steps = np.where(aligned_scores >= threshold_ideal)
+    y_labels = np.zeros(aligned_scores.shape[0], dtype=int)
+    y_labels[predicted_steps] = 1
+    accuracy = sklearn.metrics.accuracy_score(ys.astype(int), y_labels)
+
+    return OnsetEvaluation(precision, recall, fscore, mean_loss, threshold_ideal, raw_auc_score, aligned_auc_score, accuracy)
+
