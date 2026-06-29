@@ -308,7 +308,7 @@ class TestAlignedPPCDataset(unittest.TestCase):
 
         x, nps, bpm, y = dataset[0]
         
-        model = models.ppc.PumpPumpConvolutionAlignedOnset()
+        model = models.ppc.PumpPumpConvolutionAlignedOnset(beat_radius=2)
 
         with torch.no_grad():
             x = torch.tensor(x).float()[None, :]

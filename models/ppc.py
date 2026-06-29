@@ -285,9 +285,13 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
 
 
 class PumpPumpConvolutionAlignedOnset(nn.Module):
-    def __init__(self, rnn_size=200):
-        super().__init__()
+    def __init__(self, rnn_size=200, beat_radius=2):
+        assert rnn_size > 0
+        assert 0 <= beat_radius <= 2
 
+        self.beat_context = beat_context = beat_radius + 1 + beat_radius
+
+        super().__init__()
 
         self.convolution = nn.Sequential(
             nn.Conv2d(
@@ -296,18 +300,29 @@ class PumpPumpConvolutionAlignedOnset(nn.Module):
                 kernel_size=(7,3)
             ),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(3, 3)),
+            nn.MaxPool2d(kernel_size=(1, 3)),
             nn.Conv2d(
                 in_channels=10,
                 out_channels=20,
                 kernel_size=(7,3)
             ),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(3, 3)),
+            nn.MaxPool2d(kernel_size=(1, 3)),
         )
 
+        sample_x = torch.tensor(np.random.standard_normal((3, beat_context * 32, 80))).float()
+        cnn_output_shape = tuple(self.convolution(sample_x).shape)
+        cnn_output_len_flattened = np.prod(cnn_output_shape)
+
+        flattened_sizes = {
+            0: 3200,
+            1: 13440,
+            2: 23680
+        }
+
+        assert flattened_sizes[beat_radius] == cnn_output_len_flattened, f"got {cnn_output_len_flattened}"
+
         extra_features = 2
-        cnn_output_len_flattened = 2400
 
         self.rnn_projection = nn.Linear(
             in_features=cnn_output_len_flattened+extra_features,
@@ -332,6 +347,14 @@ class PumpPumpConvolutionAlignedOnset(nn.Module):
             nn.Linear(in_features=128, out_features=48)
         )
 
+    def _center_context(self, x):
+        # (Batch x Unroll x 5 x 32 x 80 x 3) ->  (Batch x Unroll x C x 32 x 80 x 3)
+
+        # where C is the context size, depending on the context radius defined in the constructor
+
+        start = (5-self.beat_context) // 2
+        end = start+self.beat_context
+        return x[:, :,  start:end , :, :  :]
 
     def forward(self, x, nps, bpms):
         """
@@ -344,9 +367,14 @@ class PumpPumpConvolutionAlignedOnset(nn.Module):
         y: (Batch x Unroll x 48) sigmoids with activations for the beat
         """
 
-        # (Batch x Unroll x 5 x 32 x 80 x 3) ->  (Batch x Unroll x 160 x 80 x 3)
+        # (Batch x Unroll x 5 x 32 x 80 x 3)
+        x = self._center_context(x)
+
+        # ->  (Batch x Unroll x C x 32 x 80 x 3)
+
+        # ->  (Batch x Unroll x C*32 x 80 x 3)
         x = torch.flatten(x, start_dim=2, end_dim=3)
-        # (Batch, Unroll, 160, 80, 3) -> (Batch, Unroll, 3, 160, 80)
+        # (Batch, Unroll, C*32, 80, 3) -> (Batch, Unroll, 3, C*32, 80)
         x = x.transpose(2, 4).transpose(3, 4)
 
         assert len(x.shape) == 5
@@ -354,16 +382,16 @@ class PumpPumpConvolutionAlignedOnset(nn.Module):
         batch = x.shape[0]
         unroll = x.shape[1]
         assert x.shape[2] == 3
-        assert x.shape[3] == 160
+        assert x.shape[3] == self.beat_context*32
         assert x.shape[4] == 80
 
         assert nps.shape == (batch,)
         assert bpms.shape == (batch, unroll)
 
-        #     Batch x UnrollLength  x 3 x 160 x 80
+        #     Batch x UnrollLength  x 3 x 5*32 x 80
 
         _x = torch.flatten(x, start_dim=0, end_dim=1)
-        # -> (Batch * UnrollLength) x 3 x 160 x 80
+        # -> (Batch * UnrollLength) x 3 x 5*32 x 80
 
         _convolved = self.convolution(_x)
         # -> (Batch * UnrollLength) x K x T x F
