@@ -48,7 +48,7 @@ def _(pickle, test_paths, training_paths, validation_paths):
     training_stepfiles   = _get_stepfiles(training_paths)
     test_stepfiles       = _get_stepfiles(test_paths)
     validation_stepfiles = _get_stepfiles(validation_paths)
-    return test_stepfiles, training_stepfiles, validation_stepfiles
+    return training_stepfiles, validation_stepfiles
 
 
 @app.cell
@@ -60,17 +60,10 @@ def _():
 
 @app.cell
 def _(UNROLL, loading, training_stepfiles):
-    training_dataset = loading.PumpItUpConvolutionSelectionLSTMDataset(training_stepfiles, unroll_length=UNROLL,
+    training_dataset = loading.ppc.PPC_SelectionLSTMDataset(training_stepfiles, unroll_length=UNROLL,
                                                                        transform=loading.MaskAndPaddingTransform(UNROLL))
     len(training_dataset)
     return (training_dataset,)
-
-
-@app.cell
-def _(UNROLL, loading, test_stepfiles):
-    testing_dataset = loading.PumpItUpConvolutionSelectionLSTMDataset(test_stepfiles, unroll_length=UNROLL)
-    len(testing_dataset)
-    return
 
 
 @app.cell
@@ -81,7 +74,7 @@ def _(BATCH_SIZE, DataLoader, training_dataset):
 
 @app.cell
 def _(device, models):
-    Model = models.PumpItUpConvolutionSelectionLSTM 
+    Model = models.ppc.PumpItUpConvolutionSelectionLSTM 
     selection_model = Model().float().to(device)
     selection_model
     return (selection_model,)
@@ -293,12 +286,6 @@ def _(mo):
 
 
 @app.cell
-def _(loading, training_stepfiles):
-    selection_dataset = loading.PumpItUpConvolutionSelectionLSTMDataset(training_stepfiles, 100)
-    return
-
-
-@app.cell
 def _(device, np, torch):
     step_data = torch.tensor(np.random.rand(20, 10, 5, 4) > 0.5).float().to(device)
     step_data.shape
@@ -336,7 +323,9 @@ def _():
     import pickle
     import numpy as np
     import loading
+    import loading.ppc
     import models
+    import models.ppc
     import json
     import evaluation
     from collections import namedtuple

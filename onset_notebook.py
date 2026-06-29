@@ -73,7 +73,7 @@ def _(loading, test_paths, training_paths, validation_paths):
 def _(loading, training_features, training_stepfiles):
     UNROLL_SIZE = 10
 
-    training_dataset = loading.PumpItUpConvolutionLSTMOnsetDataset(
+    training_dataset = loading.ppc.PPC_LSTMOnsetDataset(
         training_stepfiles, training_features, 
         UNROLL_SIZE, transform=loading.MaskAndPaddingTransform(UNROLL_SIZE, skip=1)
     )
@@ -91,7 +91,7 @@ def _(DataLoader, training_dataset):
 
 @app.cell
 def _(device, models):
-    model = models.PumpItUpConvolutionLSTMOnset(channel_is_last=True).float().to(device)
+    model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True).float().to(device)
     model
     return (model,)
 
@@ -135,7 +135,7 @@ def _(
                 y = torch.flatten(y, start_dim=0, end_dim=1)
                 pred = torch.flatten(pred, start_dim=0, end_dim=1)
                 mask = torch.flatten(mask, start_dim=0, end_dim=1) 
-            
+
                 loss_per_batch = loss_fn(pred, y)
                 loss = torch.mean(loss_per_batch * mask)
 
@@ -332,7 +332,7 @@ def _(mo):
 
 @app.cell
 def _(device, models):
-    sample_cnn_model = models.PumpItUpConvolutionCNNOnset().float().to(device)
+    sample_cnn_model = models.ppc.PumpItUpConvolutionCNNOnset().float().to(device)
     return (sample_cnn_model,)
 
 
@@ -358,7 +358,7 @@ def _(full_difficulty_data, full_model_data, sample_cnn_model):
 
 @app.cell
 def _(models):
-    sample_lstm_model = models.PumpItUpConvolutionLSTMOnset()
+    sample_lstm_model = models.ppc.PumpItUpConvolutionLSTMOnset()
     return (sample_lstm_model,)
 
 
@@ -400,7 +400,9 @@ def _():
     import pickle
     import numpy as np
     import loading
+    import loading.ppc
     import models
+    import models.ppc
     import json
     import evaluation
     from collections import namedtuple, defaultdict

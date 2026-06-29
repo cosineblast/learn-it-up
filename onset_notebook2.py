@@ -73,7 +73,7 @@ def _(loading, test_paths, training_paths, validation_paths):
 def _(loading, training_features, training_stepfiles):
     UNROLL_SIZE = 10
 
-    training_dataset = loading.PumpItUpConvolutionAlignedOnsetDataset(
+    training_dataset = loading.ppc.PPC_AlignedOnsetDataset(
         training_stepfiles, training_features, 
         UNROLL_SIZE#, transform=loading.MaskAndPaddingTransform(UNROLL_SIZE, skip=1)
     )
@@ -98,7 +98,6 @@ def _(measure_time_button, mo, training_dataset):
 
                 if i % 10 == 0:
                     bar.update(increment=10)
-        
     return
 
 
@@ -112,7 +111,7 @@ def _(DataLoader, training_dataset):
 
 @app.cell
 def _(device, models):
-    model = models.PumpPumpConvolutionAlignedOnset().float().to(device)
+    model = models.ppc.PumpPumpConvolutionAlignedOnset().float().to(device)
     model
     return (model,)
 
@@ -353,7 +352,7 @@ def _(mo):
 
 @app.cell
 def _(device, models):
-    sample_aligned_model = models.PumpPumpConvolutionAlignedOnset().float().to(device)
+    sample_aligned_model = models.ppc.PumpPumpConvolutionAlignedOnset().float().to(device)
     return (sample_aligned_model,)
 
 
@@ -395,8 +394,6 @@ def _(device, torch, training_dataset):
     print(thing_x.shape)
     print(thing_nps)
     print(thing_bpms.shape)
-
-
     return thing_bpms, thing_nps, thing_x
 
 
@@ -424,7 +421,9 @@ def _():
     import pickle
     import numpy as np
     import loading
+    import loading.ppc
     import models
+    import models.ppc
     import json
     import evaluation
     from collections import namedtuple, defaultdict
