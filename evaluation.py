@@ -194,11 +194,11 @@ def measure_aligned_onset_performance(model, chart, features, loss_fn, device):
         )
 
         loss = loss_fn(
-            log_scores,
+            log_scores[0],
             torch.tensor(ys).float().to(device)
         )
 
-        beat_scores = F.sigmoid(log_scores).detach().cpu().numpy()
+        beat_scores = F.sigmoid(log_scores[0]).detach().cpu().numpy()
         mean_loss = torch.mean(loss).detach().cpu().numpy()
 
     frame_limit = floor(chart.beat_start_end_times[-1][1] * FRAMES_PER_SECOND)
@@ -262,10 +262,10 @@ def get_aligned_onset_input(features, chart):
         result.append(padded[a+offset:b+offset])
 
     x = np.array(result)[None, :]
-    bpms = chart.beat_bpms[:beat_count]
-    nps = chart.nps
+    nps = np.array([chart.nps])
+    bpms = np.array(chart.beat_bpms[:beat_count])[None, :]
 
-    return x, bpms, nps
+    return x, nps, bpms
 
 def get_aligned_onset_expected_output(chart):
     beat_count = floor(chart.steps[-1].time_in_beats)+1

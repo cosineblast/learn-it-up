@@ -194,7 +194,7 @@ class TestEvaluationWorks(unittest.TestCase):
 class TestAlignedEvaluation(unittest.TestCase):
 
     def setUp(self):
-        audio = np.zeros((3, 80, 400)) + np.arange(400)
+        audio = np.zeros((3, 80, 450)) + np.arange(450)
         audio = audio.transpose((2, 1, 0))
         audio_len = audio.shape[0]
 
@@ -206,7 +206,7 @@ class TestAlignedEvaluation(unittest.TestCase):
         raw_chart = ssc_util.Chart(
             NOTES = [
                 [ '10000', '00100', '01000', '000100' ],
-                #[ '00100', '00001', '10000', '000001' ],
+                [ '00100', '00001', '10000', '000001' ],
             ],
             OFFSET = 0.0,
             BPMS = [(0.0, 120.0)],
@@ -228,7 +228,9 @@ class TestAlignedEvaluation(unittest.TestCase):
             unroll = x.shape[1]
 
             result = np.array(self.chart.beat_onset_vectors[:unroll], dtype=float)
-            return result * 10 - 5
+
+            result = -5 + result * 10
+            return result[None, :]
 
 
         metrics = evaluation.measure_aligned_onset_performance(perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
@@ -263,8 +265,10 @@ class TestAlignedEvaluation(unittest.TestCase):
             result = np.array(result)
 
             assert np.sum(result) == np.sum(original)
+
+            result = -5 + 10 * result + np.random.standard_normal(result.shape) / 2
             
-            return -5 + 10 * result + np.random.standard_normal(result.shape) / 2
+            return result[None, :]
 
         metrics = evaluation.measure_aligned_onset_performance(near_perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
 
@@ -273,6 +277,21 @@ class TestAlignedEvaluation(unittest.TestCase):
         self.assertGreater(metrics.fscore, 0.99)
         self.assertGreater(metrics.aligned_auc_score, 0.99)
         self.assertGreater(metrics.accuracy, 0.99)
+
+    def test_real_model_does_not_crash(self):
+
+        import models.ppc
+        
+        model = models.ppc.PumpPumpConvolutionAlignedOnset()
+
+        metrics = evaluation.measure_aligned_onset_performance(model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+
+        self.assertGreater(metrics.precision, 0.0)
+        self.assertGreater(metrics.recall, 0.0)
+        self.assertGreater(metrics.fscore, 0.0)
+        self.assertGreater(metrics.aligned_auc_score, 0.0)
+        self.assertGreater(metrics.raw_auc_score, 0.0)
+        self.assertGreater(metrics.accuracy, 0.0)
 
 
 def under_numpy(f):
