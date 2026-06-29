@@ -19,6 +19,8 @@ from collections import namedtuple, defaultdict
 
 import loading
 
+import ssc_util
+
 OnsetEvaluation = namedtuple('Evaluation', [
                         'precision',
                         'recall',
@@ -61,7 +63,6 @@ def measure_onset_performance(model, chart, features, loss_fn, device):
 
         scores = scores.flatten()
         ys = ys.flatten()
-
 
     # analyzing onsets 
 
@@ -181,10 +182,95 @@ def measure_selection_performance(model, chart, loss_fn, device):
 
     
 
+def measure_aligned_onset_performance(model, chart, features, loss_fn, device):
+    x, nps, bpms = get_aligned_onset_input(features, chart)
+    ys = get_aligned_onset_expected_output(chart)
 
+    with torch.no_grad():
+        log_scores = model(
+            torch.tensor(x).float().to(device),
+            torch.tensor(nps).float().to(device),
+            torch.tensor(bpms).float().to(device)
+        )
 
+        loss = loss_fn(
+            log_scores,
+            torch.tensor(ys).float().to(device)
+        )
 
+        beat_scores = F.sigmoid(log_scores).detach().cpu().numpy()
+        mean_loss = torch.mean(loss).detach().cpu().numpy()
+
+    frame_limit = floor(chart.beat_start_end_times[-1][1] * FRAMES_PER_SECOND)
+
+    frame_scores = beat_scores_to_frame_scores(chart, beat_scores)[:frame_limit]
+    frame_ys = beat_scores_to_frame_scores(chart, ys)[:frame_limit]
     
+    real_onsets = set(frame_of(step) for step in chart.steps)
+
+    return evaluate_frame_onset_performance(real_onsets, frame_scores, frame_ys, mean_loss)
+    # computing main metrics 
+
+def beat_scores_to_frame_scores(chart, beat_scores):
+    beat_count = beat_scores.shape[0]
+
+    beat_fractions = [i/48 for i in range(beat_count * 48)]
+    beat_fraction_times = ssc_util.compute_multiple_beats_absolute_times(0.0, chart.bpms, beat_fractions)
+
+    frame_scores = defaultdict(float)
+
+    for i in range(beat_count):
+        times = beat_fraction_times[i*48:(i+1)*48]
+        scores = beat_scores[i, :]
+
+        assert len(times) == len(scores) == 48
+
+        for j in range(48):
+            time = times[j]
+            score = scores[j]
+
+            frame = floor(time * FRAMES_PER_SECOND)
+            frame_scores[frame] = max(frame_scores[frame], score)
+
+    result = [frame_scores[i] for i in range(len(frame_scores))]
+    return np.array(result)
+
+
+        
+
+def get_aligned_onset_input(features, chart):
+    import audio_util
+    # refactor this and loader implementation into separate function
+    array, start, len = features
+    
+    slice = array[start:len]
+    default_value = np.min(slice, axis=0)
+
+    resampled = audio_util.resample_features(slice, chart.beat_start_end_times)
+
+    padding = np.tile(default_value.reshape((1, 1, 80, 3)), (2, 32, 1, 1))
+    padded = np.concat([padding, resampled, padding])
+    offset = 2
+
+    result = []
+
+    beat_count = floor(chart.steps[-1].time_in_beats)+1
+
+    for beat_index in range(beat_count):
+        a = beat_index - 2
+        b = beat_index + 2 +1
+        result.append(padded[a+offset:b+offset])
+
+    x = np.array(result)[None, :]
+    bpms = chart.beat_bpms[:beat_count]
+    nps = chart.nps
+
+    return x, bpms, nps
+
+def get_aligned_onset_expected_output(chart):
+    beat_count = floor(chart.steps[-1].time_in_beats)+1
+
+    return np.array(chart.beat_onset_vectors[:beat_count], dtype=bool)
 
 
 def evaluate_frame_onset_performance(real_onsets, scores, ys, mean_loss):

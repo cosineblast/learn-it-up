@@ -6,6 +6,7 @@ import torch
 
 import evaluation
 from ssc_util import RefinedStepFile, RefinedChart, StepInfo
+import ssc_util
 from math import floor
 
 DEFAULT_VALUE = -1
@@ -190,6 +191,102 @@ class TestEvaluationWorks(unittest.TestCase):
 
 
 
+class TestAlignedEvaluation(unittest.TestCase):
+
+    def setUp(self):
+        audio = np.zeros((3, 80, 400)) + np.arange(400)
+        audio = audio.transpose((2, 1, 0))
+        audio_len = audio.shape[0]
+
+        padding = np.ones((64, 80, 3)) * DEFAULT_VALUE
+        padded_audio = np.concat([padding, audio, padding])
+
+        self.audio_view = loading.FeatureView(padded_audio, 64, audio_len) 
+
+        raw_chart = ssc_util.Chart(
+            NOTES = [
+                [ '10000', '00100', '01000', '000100' ],
+                #[ '00100', '00001', '10000', '000001' ],
+            ],
+            OFFSET = 0.0,
+            BPMS = [(0.0, 120.0)],
+            DESCRIPTION = 'S11',
+            CREDIT = 'test',
+            TIMESIGNATURES = [(0.0, 4.0, 4.0)],
+            STOPS = [],
+            DELAYS = [],
+            WARPS = [],
+            FAKES = [],
+        )
+
+        self.chart = ssc_util.refine_chart(raw_chart)
+
+    def test_perfect_model_has_perfect_metrics(self):
+        @under_numpy
+        def perfect_model(x, nps, bpms):
+            assert x.shape[0] == 1
+            unroll = x.shape[1]
+
+            result = np.array(self.chart.beat_onset_vectors[:unroll], dtype=float)
+            return result * 10 - 5
+
+
+        metrics = evaluation.measure_aligned_onset_performance(perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+
+        self.assertGreater(metrics.precision, 0.99)
+        self.assertGreater(metrics.recall, 0.99)
+        self.assertGreater(metrics.fscore, 0.99)
+        self.assertGreater(metrics.raw_auc_score, 0.99)
+        self.assertGreater(metrics.aligned_auc_score, 0.99)
+        self.assertGreater(metrics.accuracy, 0.99)
+
+    def test_near_perfect_model_has_perfect_metrics(self):
+
+        @under_numpy
+        def near_perfect_model(x, nps, bpms):
+            assert x.shape[0] == 1
+            unroll = x.shape[1]
+
+            original = np.array(self.chart.beat_onset_vectors[:unroll], dtype=float)
+
+            result = []
+
+            for onset in original:
+                if np.sum(onset) > 0:
+                    new_onset = np.zeros(48, dtype=float)
+                    new_onset[min(np.argmax(onset)+1, 47)] = 1.0
+                else:
+                    new_onset = onset
+
+                result.append(new_onset)
+
+            result = np.array(result)
+
+            assert np.sum(result) == np.sum(original)
+            
+            return -5 + 10 * result + np.random.standard_normal(result.shape) / 2
+
+        metrics = evaluation.measure_aligned_onset_performance(near_perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+
+        self.assertGreater(metrics.precision, 0.99)
+        self.assertGreater(metrics.recall, 0.99)
+        self.assertGreater(metrics.fscore, 0.99)
+        self.assertGreater(metrics.aligned_auc_score, 0.99)
+        self.assertGreater(metrics.accuracy, 0.99)
+
+
+def under_numpy(f):
+    def np_f(*stuff):
+        np_stuff = [thing.numpy() for thing in stuff]
+        y = f(*np_stuff)
+        if isinstance(y, tuple):
+            torch_y = tuple(torch.tensor(thing) for thing in y)
+        else:
+            torch_y = torch.tensor(y)
+        return torch_y
+
+    return np_f
+    
 
         
 FRAMES_PER_SECOND = 100
