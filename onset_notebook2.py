@@ -71,7 +71,7 @@ def _(loading, test_paths, training_paths, validation_paths):
 
 @app.cell
 def _(loading, training_features, training_stepfiles):
-    UNROLL_SIZE = 10
+    UNROLL_SIZE = 16
 
     training_dataset = loading.ppc.PPC_AlignedOnsetDataset(
         training_stepfiles, training_features, 
@@ -104,7 +104,7 @@ def _(measure_time_button, mo, training_dataset):
 
 @app.cell
 def _(DataLoader, training_dataset):
-    BATCH_SIZE = 256
+    BATCH_SIZE = 32
 
     training_loader = DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
     return BATCH_SIZE, training_loader
@@ -169,7 +169,7 @@ def _(
                 optimizer.step()
                 optimizer.zero_grad()
 
-                bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
+                bar.update(increment=1, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
 
     return (train_epoch,)
