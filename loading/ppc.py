@@ -173,7 +173,17 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
         
         return self.transform((frames, difficulty, is_step))
 
+from dataclasses import dataclass
+
 class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
+
+    @dataclass
+    class Stats:
+        nps_mean: float
+        nps_std: float
+        bpm_mean: float
+        bpm_std: float
+        
     """
     The dataset for the aligned C-LSTM onset model. 
 
@@ -210,7 +220,7 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
         self.chart_len_sums = list(itertools.accumulate(block_counts))
         self.transform = transform
         self.unroll_length = unroll_length
-        self.bpm_mean, self.bpm_std, self.nps_mean, self.nps_std = _find_average_bpm_nps(stepfiles)
+        self.stats = _find_average_bpm_nps(stepfiles)
 
     def __len__(self):
         return self.len_blocks
@@ -260,10 +270,10 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
         block_length = block_last_beat - block_first_beat + 1
 
         nps = chart.nps
-        nps = (nps - self.nps_mean) / self.nps_std
+        nps = (nps - self.stats.nps_mean) / self.stats.nps_std
 
         bpms = np.array(chart.beat_bpms[block_first_beat:block_last_beat+1])
-        bpms = (bpms - self.bpm_mean) / self.bpm_std
+        bpms = (bpms - self.stats.bpm_mean) / self.stats.bpm_std
 
         onsets = np.array(chart.beat_onset_vectors[block_first_beat:block_last_beat+1], dtype=bool)
         
@@ -280,7 +290,7 @@ def _find_average_bpm_nps(stepfiles):
     nps_std = np.std(npss)
     nps_std = 1 if nps_std == 0 else nps_std
 
-    return bpm_mean, bpm_std, nps_mean, nps_std
+    return PPC_AlignedOnsetDataset.Stats(bpm_mean=bpm_mean, bpm_std=bpm_std, nps_mean=nps_mean, nps_std=nps_std)
 
 class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
     """

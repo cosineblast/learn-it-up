@@ -181,9 +181,10 @@ def measure_selection_performance(model, chart, loss_fn, device):
     return StepEvaluation(mean_loss, accuracy)    
 
     
+import loading.ppc
 
-def measure_aligned_onset_performance(model, chart, features, loss_fn, device):
-    x, nps, bpms = get_aligned_onset_input(features, chart)
+def measure_aligned_onset_performance(model, chart, features, loss_fn, stats: loading.ppc.PPC_AlignedOnsetDataset.Stats, device):
+    x, nps, bpms = get_aligned_onset_input(features, chart, stats)
     ys = get_aligned_onset_expected_output(chart)
 
     with torch.no_grad():
@@ -239,7 +240,7 @@ def beat_scores_to_frame_scores(chart, beat_scores, frame_count):
 
         
 
-def get_aligned_onset_input(features, chart):
+def get_aligned_onset_input(features, chart, stats):
     import audio_util
     # refactor this and loader implementation into separate function
     array, start, len = features
@@ -265,6 +266,9 @@ def get_aligned_onset_input(features, chart):
     x = np.array(result)[None, :]
     nps = np.array([chart.nps])
     bpms = np.array(chart.beat_bpms[:beat_count])[None, :]
+
+    nps = (nps - stats.nps_mean) / stats.nps_std
+    bpms = (bpms - stats.bpm_mean) / stats.bpm_std
 
     return x, nps, bpms
 
