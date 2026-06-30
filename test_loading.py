@@ -301,6 +301,32 @@ class TestAlignedPPCDataset(unittest.TestCase):
 
         self.chart = ssc_util.refine_chart(raw_chart)
 
+    def test_stats_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        features = [self.audio_view]
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2)
+
+        self.assertAlmostEqual(self.chart.avg_bpm, 120.0)
+
+        self.assertAlmostEqual(dataset.stats.bpm_mean, 120.0)
+        self.assertAlmostEqual(dataset.stats.bpm_std, 1.0)
+        self.assertAlmostEqual(dataset.stats.nps_mean, 3.0, delta=0.5)
+        self.assertAlmostEqual(dataset.stats.nps_std, 1.0)
+
+    def test_bpm_nps_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        features = [self.audio_view]
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2)
+
+        x, nps, bpm, y = dataset[0]
+
+        self.assertAlmostEqual(np.min(bpm), 0.0)
+        self.assertAlmostEqual(np.max(bpm), 0.0)
+
+        self.assertAlmostEqual(np.min(nps), 0.0)
+        self.assertAlmostEqual(np.max(nps), 0.0)
+
+
     def test_is_compatible_with_model(self):
         stepfiles = [stepfile_of([self.chart])]
         features = [self.audio_view]

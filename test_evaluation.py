@@ -1,6 +1,7 @@
 
 import unittest
 import loading
+from loading.ppc import PPC_AlignedOnsetDataset
 import numpy as np
 import torch
 
@@ -219,6 +220,13 @@ class TestAlignedEvaluation(unittest.TestCase):
             FAKES = [],
         )
 
+        self.stats = PPC_AlignedOnsetDataset.Stats(
+            bpm_mean=120.0,
+            bpm_std=1.0,
+            nps_mean=2.0,
+            nps_std=1.0
+        )
+
         self.chart = ssc_util.refine_chart(raw_chart)
 
     def test_perfect_model_has_perfect_metrics(self):
@@ -233,7 +241,7 @@ class TestAlignedEvaluation(unittest.TestCase):
             return result[None, :]
 
 
-        metrics = evaluation.measure_aligned_onset_performance(perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+        metrics = evaluation.measure_aligned_onset_performance(perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), self.stats, 'cpu')
 
         self.assertGreater(metrics.precision, 0.99)
         self.assertGreater(metrics.recall, 0.99)
@@ -270,7 +278,7 @@ class TestAlignedEvaluation(unittest.TestCase):
             
             return result[None, :]
 
-        metrics = evaluation.measure_aligned_onset_performance(near_perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+        metrics = evaluation.measure_aligned_onset_performance(near_perfect_model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), self.stats, 'cpu')
 
         self.assertGreater(metrics.precision, 0.99)
         self.assertGreater(metrics.recall, 0.99)
@@ -284,7 +292,7 @@ class TestAlignedEvaluation(unittest.TestCase):
         
         model = models.ppc.PumpPumpConvolutionAlignedOnset()
 
-        metrics = evaluation.measure_aligned_onset_performance(model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+        metrics = evaluation.measure_aligned_onset_performance(model, self.chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), self.stats, 'cpu')
 
         self.assertGreater(metrics.precision, 0.0)
         self.assertGreater(metrics.recall, 0.0)
