@@ -285,7 +285,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
 
 
 class PumpPumpConvolutionAlignedOnset(nn.Module):
-    def __init__(self, rnn_size=200, beat_radius=2):
+    def __init__(self, rnn_size=200, beat_radius=2, mlp_sizes=(256, 128)):
         assert rnn_size > 0
         assert 0 <= beat_radius <= 2
 
@@ -338,13 +338,13 @@ class PumpPumpConvolutionAlignedOnset(nn.Module):
         )
 
         self.mlp = nn.Sequential(
-            nn.Linear(in_features=rnn_size, out_features=256),
+            nn.Linear(in_features=rnn_size, out_features=mlp_sizes[0]),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(in_features=256, out_features=128),
+            nn.Linear(in_features=mlp_sizes[0], out_features=mlp_sizes[1]),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(in_features=128, out_features=48)
+            nn.Linear(in_features=mlp_sizes[1], out_features=48)
         )
 
     def _center_context(self, x):
