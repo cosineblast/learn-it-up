@@ -21,18 +21,19 @@ import loading
 
 import ssc_util
 
-OnsetEvaluation = namedtuple('Evaluation', [
-                        'precision',
-                        'recall',
-                        'fscore',
-                        'mean_loss',
-                        'threshold_ideal',
-                        'raw_auc_score',
-                        'aligned_auc_score',
-                        'accuracy'
-                    ])
+import typing
 
-def measure_onset_performance(model, chart, features, loss_fn, device):
+class OnsetEvaluation(typing.NamedTuple):
+    precision: float
+    recall: float
+    fscore: float
+    mean_loss: float
+    threshold_ideal: float
+    raw_auc_score: float
+    aligned_auc_score: float
+    accuracy: float
+
+def measure_onset_performance(model, chart: ssc_util.RefinedChart, features: loading.FeatureView, loss_fn, device: str):
 
     # loading model input
 
@@ -152,7 +153,7 @@ StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy'])
 
 def measure_selection_performance(model, chart, loss_fn, device):
 
-    x, delta, y = loading.steps_to_model_input(chart.steps, 0, len(chart.steps))
+    x, delta, y = loading.ppc.steps_to_model_input(chart.steps, 0, len(chart.steps))
 
     real_y = y
 
