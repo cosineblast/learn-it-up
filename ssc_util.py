@@ -404,7 +404,7 @@ def _compute_beat_times(offset, bpms, beat_count) -> list[tuple[float, float]]:
 
     return result
 
-def _compute_beat_bpms(bpms, beat_count) -> list[tuple[float, float]]:
+def _compute_beat_bpms(bpms, beat_count) -> list[float]:
     """Returns a list with the average BPM of each beat of the chart.
      The average BPM is computed as the harmonic mean of the BPM of each beat segment
      """

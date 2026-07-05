@@ -31,12 +31,13 @@ class PPC_CNNOnsetDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.inner)
 
-    def __getitem__(self, target_index):
+    def __getitem__(self, index):
+        target_index = index
         frames, difficulty, is_step = self.inner[target_index]
 
         return self.transform((frames[0], difficulty, is_step[0]))
 
-_ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
+ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
 
 class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
     """
@@ -65,7 +66,7 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
             assert last_frame_index < all_features[stepfile_index].len
             assert first_frame_index < last_frame_index
 
-            return _ChartBlockStats(len_frames // unroll_length + (len_frames % unroll_length != 0),
+            return ChartBlockStats(len_frames // unroll_length + (len_frames % unroll_length != 0),
                                     first_frame_index,
                                     last_frame_index,
                                     stepfile_index)
@@ -130,7 +131,8 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
         return r
 
 
-    def __getitem__(self, target_index):
+    def __getitem__(self, index):
+        target_index = index
         assert isinstance(target_index, int)
         assert target_index < len(self)
 
@@ -247,7 +249,8 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
 
         return np.stack(result)
 
-    def __getitem__(self, target_index):
+    def __getitem__(self, index: int):
+        target_index = index
         assert isinstance(target_index, int)
         assert target_index < len(self)
 
@@ -337,7 +340,8 @@ class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
     def _get_target_chart_index(self, target_index):
         return _binary_search_index(self.chart_block_counts_sum, target_index)
 
-    def __getitem__(self, target_index):
+    def __getitem__(self, index):
+        target_index = index
         assert isinstance(target_index, int)
         assert target_index < len(self)
 

@@ -82,7 +82,7 @@ def MaskAndPaddingTransform(unroll_length, skip=None):
     Additionally, an additional element `mask` is added to the returned tuple, containing a vector of shape (n,) with ones
     in the first k positions, and zero in the last n-k positions.
     """
-    def maskAndPad(stuff):
+    def maskAndPad(stuff: tuple):
         assert isinstance(stuff, tuple)
 
         size    = stuff[0].shape[0]
