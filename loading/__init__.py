@@ -11,12 +11,17 @@ import pickle
 
 import random
 
+import typing
+
 """
 A featureview is a tuple that represents a slice of the content of a features array.
 The real content starts at start, and ends at start+len, but it may be ok to access
 the array outside of this range, considering there might be padding.
 """
-FeatureView = namedtuple('FeatureView', ['array', 'start', 'len'])
+class FeatureView(typing.NamedTuple):
+    array: np.ndarray
+    start: int
+    len: int
 
 
 CONTEXT_RADIUS=7
@@ -30,7 +35,7 @@ class LoadFeaturesCached():
         self.cache = {}
         self.normalize_features = normalize_features
 
-    def __call__(self, path):
+    def __call__(self, path: str):
         if path in self.cache:
             return self.cache[path]
 
@@ -43,7 +48,7 @@ class LoadFeaturesCached():
 
             return view
 
-def prepare_features(features, normalize=True):
+def prepare_features(features: np.ndarray, normalize=True) -> FeatureView:
     """Adds 7 frames of padding before and after the given features, padded with minimum values of the given features,
        and normalizes features to mean 0 and standard deviation 1.
        Returns a feature view of the non-padded features. 
@@ -58,7 +63,7 @@ def prepare_features(features, normalize=True):
 
     return FeatureView(padded, CONTEXT_RADIUS, features.shape[0])
 
-def get_all_song_context_features(features_view, first_frame, last_frame, upshape=False):
+def get_all_song_context_features(features_view: FeatureView, first_frame: int, last_frame: int, upshape=False) -> np.ndarray:
     """Returns a list with all the 15-frame context windows of the given feature view,
        within the given inclusive frame range"""
 
@@ -74,7 +79,7 @@ def get_all_song_context_features(features_view, first_frame, last_frame, upshap
     return frame_features[None, :] if upshape else frame_features
 
 
-def MaskAndPaddingTransform(unroll_length, skip=None):
+def MaskAndPaddingTransform(unroll_length: int, skip: int | None = None):
     """
     This transform function takes a tuple containing multiple tensors X1, ..., Xn of
     possibly different shapes, but all matching the size of their their main axis as `k` (X1.shape[0] = ... = Xn.shape[0] = k).
@@ -82,7 +87,7 @@ def MaskAndPaddingTransform(unroll_length, skip=None):
     Additionally, an additional element `mask` is added to the returned tuple, containing a vector of shape (n,) with ones
     in the first k positions, and zero in the last n-k positions.
     """
-    def maskAndPad(stuff: tuple):
+    def maskAndPad(stuff: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
         assert isinstance(stuff, tuple)
 
         size    = stuff[0].shape[0]

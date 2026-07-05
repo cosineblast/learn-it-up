@@ -9,8 +9,11 @@ import torch
 import random
 
 import loading
+from loading import FeatureView
 
 import audio_util
+
+from ssc_util import RefinedStepFile, RefinedChart, StepInfo
 
 CONTEXT_RADIUS = loading.CONTEXT_RADIUS
 FRAMES_PER_SECOND = 100 
@@ -24,14 +27,14 @@ class PPC_CNNOnsetDataset(torch.utils.data.Dataset):
     - Difficulty: (25,) np tensor containing the one-hot difficulty
     - y: True or False depending on whether that frame is a step or not
     """
-    def __init__(self, stepfiles, all_features, transform=(lambda x:x)):
+    def __init__(self, stepfiles: list[RefinedStepFile], all_features: list[FeatureView], transform=(lambda x:x)):
         self.inner = PPC_LSTMOnsetDataset(stepfiles, all_features, 1)
         self.transform = transform
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.inner)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         target_index = index
         frames, difficulty, is_step = self.inner[target_index]
 
@@ -51,10 +54,10 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
     - Difficulty: (25,) np tensor containing the one-hot difficulty for the returned frames
     - y: (N,) bool np tensor determining whether the frames are step or not
     """
-    def __init__(self, stepfiles, all_features, unroll_length, transform=(lambda x:x)):
+    def __init__(self, stepfiles: list[RefinedStepFile], all_features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
         # For more information on how data is stored in this class, see the LSTM selection model class
 
-        def get_chart_stats(chart, stepfile_index):
+        def get_chart_stats(chart: RefinedChart, stepfile_index: int):
             # these are inclusive
             first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
             last_frame_index = floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
@@ -87,13 +90,13 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
         self.transform = transform
         self.unroll_length = unroll_length
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.len_blocks
 
-    def _get_target_chart_index(self, target_index):
+    def _get_target_chart_index(self, target_index: int) -> tuple[int, int]:
         return _binary_search_index(self.chart_len_sums, target_index)
 
-    def _get_frame_context(self, view, first_frame, last_frame):
+    def _get_frame_context(self, view: FeatureView, first_frame: int, last_frame: int) -> np.ndarray:
         array, start, length = view
 
         result = []
@@ -104,7 +107,7 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
 
         return np.stack(result)
 
-    def _get_next_step_index(self, steps, target_index):
+    def _get_next_step_index(self, steps: list[StepInfo], target_index: int) -> int | None:
         if steps[0].time_in_seconds * FRAMES_PER_SECOND >= target_index:
             return 0
 
@@ -131,7 +134,7 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
         return r
 
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         target_index = index
         assert isinstance(target_index, int)
         assert target_index < len(self)
@@ -198,8 +201,8 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
     - BPMS: (N x 48) the bpms of each batch segment, normalized to zero mean 1 variance over all the stepfiles
     - y: (N x 48) bool np tensor with the onsets for the given beats
     """
-    def __init__(self, stepfiles, all_features, unroll_length, transform=(lambda x:x)):
-        def get_chart_block_count(chart):
+    def __init__(self, stepfiles: list[RefinedStepFile], all_features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
+        def get_chart_block_count(chart: RefinedChart) -> int:
             first_beat_index = 0
             last_beat_index = floor(chart.steps[-1].time_in_beats)
 
@@ -224,13 +227,13 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
         self.unroll_length = unroll_length
         self.stats = _find_average_bpm_nps(stepfiles)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.len_blocks
 
-    def _get_target_chart_index(self, target_index):
+    def _get_target_chart_index(self, target_index: int) -> tuple[int, int]:
         return _binary_search_index(self.chart_len_sums, target_index)
 
-    def _get_beat_context(self, chart, view, first_beat, last_beat):
+    def _get_beat_context(self, chart: RefinedChart, view: FeatureView, first_beat: int, last_beat: int) -> np.ndarray:
         array, start, length = view
 
         slice = array[start:start+length]
@@ -282,15 +285,15 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
         
         return self.transform((beat_frames, nps, bpms, onsets))
 
-def _find_average_bpm_nps(stepfiles):
+def _find_average_bpm_nps(stepfiles: list[RefinedStepFile]) -> PPC_AlignedOnsetDataset.Stats:
     bpms = [chart.avg_bpm for file in stepfiles for chart in file.charts]
-    bpm_mean = np.mean(bpms)
-    bpm_std = np.std(bpms)
+    bpm_mean = float(np.mean(bpms))
+    bpm_std = float(np.std(bpms))
     bpm_std = 1 if bpm_std == 0 else bpm_std
 
     npss = [chart.nps for file in stepfiles for chart in file.charts]
-    nps_mean = np.mean(npss)
-    nps_std = np.std(npss)
+    nps_mean = float(np.mean(npss))
+    nps_std = float(np.std(npss))
     nps_std = 1 if nps_std == 0 else nps_std
 
     return PPC_AlignedOnsetDataset.Stats(bpm_mean=bpm_mean, bpm_std=bpm_std, nps_mean=nps_mean, nps_std=nps_std)
@@ -308,7 +311,7 @@ class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
     - y: (N,) integer np tensor containing the one-hot index of the next steps of the sequence
     """
 
-    def __init__(self, stepfiles, unroll_length, transform=(lambda x:x)):
+    def __init__(self, stepfiles: list[RefinedStepFile], unroll_length: int, transform=(lambda x:x)):
         # this class divides all the input chart steps into blocks of size UnrollLength and allows
         # access to them by index.
         # charts may have a number of steps that is not divisble by the unroll length, so the returned blocks
@@ -334,13 +337,13 @@ class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
         self.chart_block_counts_sum = list(itertools.accumulate(chart_block_counts))
         self.transform = transform
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.len_blocks
 
-    def _get_target_chart_index(self, target_index):
+    def _get_target_chart_index(self, target_index: int) -> tuple[int, int]:
         return _binary_search_index(self.chart_block_counts_sum, target_index)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         target_index = index
         assert isinstance(target_index, int)
         assert target_index < len(self)
@@ -360,7 +363,7 @@ class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
 
         return self.transform(steps_to_model_input(chart.steps, start_index, end_index))
 
-def _binary_search_index(sums, target_index):
+def _binary_search_index(sums, target_index: int) -> tuple[int, int]:
     """
     Given the prefix sum of an array A of items, returns the index of the
     first item such that target < prefix_sum item.
@@ -390,7 +393,7 @@ def _binary_search_index(sums, target_index):
 
     
 
-def steps_to_model_input(steps, start_index, end_index):
+def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Given a list of StepInfo values, this function  returns
     the selection model bag-of-arrows np tensor input for the steps in the given range.
@@ -422,7 +425,7 @@ def steps_to_model_input(steps, start_index, end_index):
     return x, delta, y
 
 _bag_of_arrows_cache = {}
-def stepcode_to_bag_tensor(stepcode):
+def stepcode_to_bag_tensor(stepcode: str) -> np.ndarray:
     if stepcode in _bag_of_arrows_cache:
         return _bag_of_arrows_cache[stepcode]
 
@@ -435,7 +438,7 @@ def stepcode_to_bag_tensor(stepcode):
     return result
 
 _index_cache = {}
-def stepcode_to_index(_stepcode):
+def stepcode_to_index(_stepcode: str) -> int:
     if _stepcode in _index_cache:
         return _index_cache[_stepcode]
 
@@ -447,7 +450,7 @@ def stepcode_to_index(_stepcode):
 
     return index
 
-def index_to_stepcode(index):
+def index_to_stepcode(index: int) -> str:
     stepcode = [0, 0, 0, 0, 0]
     stepcode[0] = index % 4
     stepcode[1] = (index // 4) % 4
