@@ -8,6 +8,7 @@ import torch
 import evaluation
 from ssc_util import RefinedStepFile, RefinedChart, StepInfo
 import ssc_util
+import fractions
 from math import floor
 
 DEFAULT_VALUE = -1
@@ -36,7 +37,7 @@ class TestEvaluationWorks(unittest.TestCase):
             )
 
         def step_at(time):
-            return StepInfo(time_in_beats=0.0, time_in_seconds=time, stepcode='10000')
+            return StepInfo(time_in_beats=fractions.Fraction(0), time_in_seconds=time, stepcode='10000')
 
         charts = [
             chart_of([step_at(1.0), step_at(1.5), step_at(1.75), step_at(1.832), step_at(1.948), step_at(2.0)], diff=2),
@@ -183,7 +184,7 @@ class TestEvaluationWorks(unittest.TestCase):
 
             expected_recall = (len(chart.steps) - 1) / len(chart.steps)
 
-            self.assertAlmostEqual(result.recall,expected_recall, f'Recall for chart {i} must match expected', 0.05)
+            self.assertAlmostEqual(result.recall,expected_recall, msg=f'Recall for chart {i} must match expected', delta=0.05)
 
     def test_very_misaligned_model_has_expected_metrics(self):
         for i, chart in enumerate(self.charts):

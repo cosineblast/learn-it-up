@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 import loading
 import loading.ppc
+import fractions
 from ssc_util import RefinedStepFile, RefinedChart, StepInfo
 
 DEFAULT_VALUE = -1
@@ -34,7 +35,7 @@ def stepfile_of(charts, title='some file'):
     )
 
 def step_at(time):
-    return StepInfo(time_in_beats=0.0, time_in_seconds=time, stepcode='10000')
+    return StepInfo(time_in_beats=fractions.Fraction(0), time_in_seconds=time, stepcode='10000')
 
 def sample_input():
 
