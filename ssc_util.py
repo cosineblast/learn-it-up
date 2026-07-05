@@ -37,6 +37,7 @@ import typing
 import pickle
 
 import numpy as np
+import numpy.typing as npt
 import scipy.stats
 
 from fractions import Fraction
@@ -96,7 +97,7 @@ class RefinedChart(NamedTuple):
     credit: str
     beat_start_end_times: list[tuple[float, float]]
     beat_bpms: list[float]
-    beat_onset_vectors: list[list[float]]
+    beat_onset_vectors: list[list[int]]
 
 # absolute time information in charts and absolute music file path
 class RefinedStepFile(NamedTuple):
@@ -116,11 +117,11 @@ def load_ssc(filename: str) -> StepFile:
     all_chart_rows = blocks[1:]
 
     stepfile_info = {
-        row.key: row.value for row in header_rows if row.key in STEPFILE_KEYS
+        row.key: unwrap(row.value) for row in header_rows if row.key in STEPFILE_KEYS
     }
 
     charts = [
-        {row.key: row.value for row in rows if row.key in CHART_KEYS}
+        {row.key: unwrap(row.value) for row in rows if row.key in CHART_KEYS}
         for rows in all_chart_rows
     ]
 
@@ -130,7 +131,11 @@ def load_ssc(filename: str) -> StepFile:
 
     return StepFile(info=stepfile_info, charts=charts)
 
-def _split_chart_blocks(content):
+def unwrap(x: str | None) -> str:
+    assert x is not None
+    return x
+
+def _split_chart_blocks(content: typing.Iterator[msdparser.MSDParameter]) -> list[list[msdparser.MSDParameter]]:
     return [
         list(block)
         for is_notedata_row, block in itertools.groupby(
@@ -139,7 +144,7 @@ def _split_chart_blocks(content):
         if not is_notedata_row
     ]
 
-def _fill_default_chart_values(charts, stepfile_info, filename):
+def _fill_default_chart_values(charts: list[dict[str, str]], stepfile_info: dict[str, str], filename: str):
     """Fills a dictionary with default chart attribute keys as necessary."""
 
     default_chart_values = {
@@ -166,15 +171,15 @@ def _fill_default_chart_values(charts, stepfile_info, filename):
                         )
                     )
 
-def _parse_chart_strings(chart: dict) -> Chart:
+def _parse_chart_strings(chart: dict[str, str]) -> Chart:
     """Parses the strings of a dictionary with chart attribute keys into a chart object."""
 
     return Chart(
         OFFSET = float(chart["OFFSET"]),
-        BPMS = _parse_equals_pair_list(chart["BPMS"]),
+        BPMS = _parse_equals_pair_list2(chart["BPMS"]),
         STOPS = _parse_equals_pair_list(chart["STOPS"]),
         DELAYS = _parse_equals_pair_list(chart["DELAYS"]),
-        TIMESIGNATURES = _parse_equals_pair_list(chart["TIMESIGNATURES"]),
+        TIMESIGNATURES = _parse_equals_pair_list3(chart["TIMESIGNATURES"]),
         FAKES = _parse_equals_pair_list(chart["FAKES"]),
         WARPS = _parse_equals_pair_list(chart["WARPS"]),
         NOTES = _parse_notes(chart["NOTES"]),
@@ -190,24 +195,40 @@ def _parse_chart_strings(chart: dict) -> Chart:
         CREDIT = chart["CREDIT"]
     )
 
-def _parse_notes(notes):
+def _parse_notes(notes: str) -> list[list[str]]:
     """Converts a ssc notes string (measures sep by ',' lines sep by newline)
     into a nested list of stepcodes"""
     notes = notes.strip()
-    notes = notes.split(",")
-    notes = [block.split("\n") for block in notes]
+    notes: list[str] = notes.split(",")
+    notes: list[list[str]] = [block.split("\n") for block in notes]
     notes = [[row.strip() for row in block] for block in notes]
     notes = [[row for row in block if row != ""] for block in notes]
     return notes
 
 
-def _parse_equals_pair_list(string):
+def _parse_equals_pair_list(string: str) -> list[tuple[float, ...]]:
     """Converts a string of the form '1=2,3=4' into a list of tuples [(1,2), (3,4)]"""
     items = [string.strip().split("=") for string in string.split(",") if string != ""]
     pairs = [tuple([float(value) for value in item]) for item in items]
     return pairs
 
-def is_applicable_chart(chart: Chart, stepfile_name=None):
+def _parse_equals_pair_list2(string: str) -> list[tuple[float, float]]:
+    """Same as _parse_equals_pair_list but ensures result is a pair"""
+    xs = _parse_equals_pair_list(string)
+    for x in xs:
+        assert len(x) == 2, f"expected this field to be a pair, but got {xs}"
+    return typing.cast(list[tuple[float, float]], x)
+
+def _parse_equals_pair_list3(string: str) -> list[tuple[float, float, float]]:
+    """Same as _parse_equals_pair_list but ensures result is a triplet"""
+    xs = _parse_equals_pair_list(string)
+    for x in xs:
+        assert len(x) == 3, f"expected this field to be a triplet, but got {xs}"
+    return typing.cast(list[tuple[float, float, float]], x)
+
+
+
+def is_applicable_chart(chart: Chart, stepfile_name=None) -> bool:
     """Determines if a chart should be skipped or kept."""
 
     name_ok = (
@@ -254,7 +275,7 @@ def is_applicable_chart(chart: Chart, stepfile_name=None):
     return check_notes_ok() and name_ok and delay_ok and warp_ok and time_sig_ok
 
 
-def refine_stepfile(stepfile: StepFile, original_path) -> RefinedStepFile:
+def refine_stepfile(stepfile: StepFile, original_path: str) -> RefinedStepFile:
     """Refines a stepfile to add absolute time information and absolute music path."""
 
     absolute_music_path = (Path(original_path).parent / Path(stepfile.info["MUSIC"]).name).resolve()
@@ -293,7 +314,7 @@ def _get_difficulty(description: str) -> int:
     else:
         return int(description[1:])
 
-def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
+def _compute_steps_absolute_times(offset: float, bpms: list[tuple[float, float]], notes: list[list[str]]) -> list[StepInfo]:
     """
     A stepfile chart is a list of measures, in which each measure is a list of steps.
     A measure is a unit of time consisting of four beats.
@@ -324,7 +345,7 @@ def _compute_steps_absolute_times(offset, bpms, notes) -> list[StepInfo]:
 
     return result
 
-def _compute_segment_durations(bpms):
+def _compute_segment_durations(bpms: list[tuple[float, float]]) -> list[float]:
     """
     Computes the amount of time between BPM changes.
 
@@ -344,13 +365,13 @@ def _compute_segment_durations(bpms):
         for (time, bpm), (nexttime, nextbpm) in zip(bpms, bpms[1:])
     ]
 
-def _bpm_to_spb(bpm):
+def _bpm_to_spb(bpm: float) -> float:
     """Converts from Beats Per Minute to Seconds Per Beat"""
 
     return 60.0 / bpm
 
 
-def _compute_beat_absolute_time(offset, bpms, segment_durations, beat):
+def _compute_beat_absolute_time(offset: float, bpms: list[tuple[float, float]], segment_durations: list[float], beat: float) -> float:
     """Computes the absolute time of a beat in seconds"""
     segment_index = (
         sum(1 for _ in itertools.takewhile(lambda bpm: beat + _EPSILON > bpm[0], bpms))
@@ -368,7 +389,7 @@ def _compute_beat_absolute_time(offset, bpms, segment_durations, beat):
     # so we have to subtract the offset.
     return time_before_this_segment + time_since_start_of_this_segment - offset
 
-def compute_multiple_beats_absolute_times(offset, bpms, beats):
+def compute_multiple_beats_absolute_times(offset: float, bpms: list[tuple[float, float]], beats: list[float]) -> list[float]:
     """Computes the absolute time in seconds of multiple sorted beats.
     Equivalent to _compute_beat_absolute_time for each beat"""
 
@@ -394,7 +415,7 @@ def compute_multiple_beats_absolute_times(offset, bpms, beats):
 
     return result
 
-def _compute_beat_times(offset, bpms, beat_count) -> list[tuple[float, float]]:
+def _compute_beat_times(offset: float, bpms: list[tuple[float, float]], beat_count: int) -> list[tuple[float, float]]:
     """Returns a list of tuples (start, end) with the start and end times of the given beat in seconds"""
     durations = _compute_segment_durations(bpms)
 
@@ -404,7 +425,7 @@ def _compute_beat_times(offset, bpms, beat_count) -> list[tuple[float, float]]:
 
     return result
 
-def _compute_beat_bpms(bpms, beat_count) -> list[float]:
+def _compute_beat_bpms(bpms: list[tuple[float, float]], beat_count: int) -> list[float]:
     """Returns a list with the average BPM of each beat of the chart.
      The average BPM is computed as the harmonic mean of the BPM of each beat segment
      """
@@ -426,21 +447,21 @@ def _compute_beat_bpms(bpms, beat_count) -> list[float]:
 
     return [get_bpm(beat) for beat in range(beat_count)]
 
-def find_average_bpm(bpms, last_beat):
+def find_average_bpm(bpms: list[tuple[float, float]], last_beat: float) -> float:
     """
     Given a list of pairs bpms containing the BPM segment starts and segment BPMs, and the last beat of the last segment,
     computes the average BPM of the whole segment, using harmonic mean.
     """
 
-    bpms = np.array(bpms)
+    bpms: npt.ArrayLike = np.array(bpms)
     bpms = bpms[bpms[:, 0] < last_beat]
     durations = np.append(bpms[1:, 0], last_beat) - bpms[:, 0]
     return scipy.stats.hmean(bpms[:, 1], weights=durations)
 
 
-def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count):
+def _compute_beat_onset_vectors(refined_steps: list[StepInfo], beat_count: int) -> list[list[int]]:
     """Returns a list with the onset vectors for each beat in this stepfile. An onset vector
-    of a beat is an array with 48 positions, where a 1 in index i indicates the presence
+    of a beat is an array with 48 positions, where a true in index i indicates the presence
     of a step in the i/48 time of the beat.
     """
 
