@@ -35,41 +35,29 @@ class OnsetEvaluation(typing.NamedTuple):
 
 def measure_onset_performance(model, chart: ssc_util.RefinedChart, features: loading.FeatureView, loss_fn, device: str):
 
-    # loading model input
-
-    first_frame = frame_of(chart.steps[0])
-    last_frame = frame_of(chart.steps[-1])
-
-    frame_features = loading.get_all_song_context_features(features, first_frame, last_frame, upshape=True)
-
-    difficulties = np.zeros((1, 25))
-    difficulties[0, chart.difficulty-1] = 1.0
-
-    step_frames = np.array([frame_of(step) for step in chart.steps])
-    step_onsets = step_frames - first_frame
-    ys = np.zeros((1, frame_features.shape[1]), dtype=np.bool)
-    ys[0, step_onsets] = True
-
-    # running the model
+    length = loading.ppc.lstm_onset_chart_len(chart)
+    x, difficulty, y = loading.ppc.lstm_onset_getitem(chart, features, 0, length)
 
     with torch.no_grad():
-        ys_tensor = torch.tensor(ys).float().to(device)
-        frame_features = torch.tensor(frame_features).float().to(device)
-        difficulties = torch.tensor(difficulties).float().to(device)
+        x = torch.tensor(x)[None, :].float().to(device)
+        y_torch = torch.tensor(y)[None, :].float().to(device)
+        difficulty = torch.tensor(difficulty)[None, :].float().to(device)
 
-        log_scores = model(frame_features, difficulties)
+        log_scores = model(x, difficulty)
 
         scores = F.sigmoid(log_scores).detach().cpu().numpy()
-        mean_loss = torch.mean(loss_fn(log_scores, ys_tensor)).detach().cpu().numpy()
+        mean_loss = torch.mean(loss_fn(log_scores, y_torch)).detach().cpu().numpy()
 
         scores = scores.flatten()
-        ys = ys.flatten()
+        y = y.flatten()
 
     # analyzing onsets 
 
+    step_frames = np.array([frame_of(step) for step in chart.steps])
+    step_onsets = step_frames - loading.ppc.chart_first_frame(chart)
     real_onsets = set(step_onsets)
 
-    return evaluate_frame_onset_performance(real_onsets, scores, ys, mean_loss)
+    return evaluate_frame_onset_performance(real_onsets, scores, y, mean_loss)
 
 def get_best_metrics(precisions, recalls, thresholds):
     fscores_denom = precisions + recalls
