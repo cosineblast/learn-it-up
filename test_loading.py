@@ -85,15 +85,47 @@ class TestCNNDataset(unittest.TestCase):
             np.testing.assert_array_equal(difficulty1, difficulty)
             np.testing.assert_array_equal(is_step1[0], is_step)
         
-
-
-class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
-
+class TestLSTMOnsetInputLoader(unittest.TestCase):
     def setUp(self):
-        stepfiles, audios, audio = sample_input()
+        self.stepfiles, self.audios, self.audio = sample_input()
 
-        self.dataset = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 1)
-        self.audio = audio
+        charts = [chart for stepfile in self.stepfiles for chart in stepfile.charts]
+
+        self.charts = charts
+        self.subject = lambda i, chart: loading.ppc.lstm_onset_getitem(charts[chart], self.audios[0], i, 1)
+
+    def test_len_charts_is_ok(self):
+        chartlen = lambda chart: loading.ppc.lstm_onset_chart_len(chart, 1)
+
+        self.assertEqual(chartlen(self.charts[0]), 101)
+        self.assertEqual(chartlen(self.charts[1]), 201)
+        self.assertEqual(chartlen(self.charts[2]), 491)
+   
+    def test_difficulty_first_chart_ok(self):
+        for i in irange(0, 100):
+            _, difficulty, _, = self.subject(i, chart=0)
+
+            self.assertEqual(difficulty[1], 1)
+            self.assertEqual(np.sum(difficulty), 1)
+
+    def test_steps_first_chart_ok(self):
+        step_indices = set()
+
+        for i in irange(0, 100):
+            _, _, y = self.subject(i, chart=0)
+
+            self.assertEqual(y.shape, (1,))
+
+            if y[0]:
+                step_indices.add(i)
+
+        self.assertEqual(step_indices, {0, 50, 75, 83, 94, 100})
+
+    def test_frames_first_chart_ok(self):
+        for i in irange(0, 100):
+            frames, _, _ = self.subject(i, chart=0)
+            f = self.context_around(i+100)
+            np.testing.assert_array_equal(frames, f)
 
     def context_around(self, i):
         result = np.zeros((15, 3))
@@ -110,93 +142,94 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
             j += 1
 
         return result.reshape((1, 15, 3))
-        
 
-    def test_stats_ok(self):
-        # TODO: test these with PerChartDataset
-        #self.assertEqual(self.dataset.chart_stats[0].len_blocks, 101)
-        #self.assertEqual(self.dataset.chart_stats[1].len_blocks, 201)
-        #self.assertEqual(self.dataset.chart_stats[2].len_blocks, 491)
-        self.assertEqual(len(self.dataset), 793)
-
-    def test_difficulty_first_chart_ok(self):
-        for i in irange(0, 100):
-            _, difficulty, _, = self.dataset[i]
-
-            self.assertEqual(difficulty[1], 1)
-            self.assertEqual(np.sum(difficulty), 1)
-
-    def test_steps_first_chart_ok(self):
-        step_indices = set()
-
-        for i in irange(0, 100):
-            _, _, y = self.dataset[i]
-
-            self.assertEqual(y.shape, (1,))
-
-            if y[0]:
-                step_indices.add(i)
-
-        self.assertEqual(step_indices, {0, 50, 75, 83, 94, 100})
-
-    def test_frames_first_chart_ok(self):
-        for i in irange(0, 100):
-            frames, _, _ = self.dataset[i]
-            f = self.context_around(i+100)
-            np.testing.assert_array_equal(frames, f)
-
-    ## second chart
 
     def test_difficulty_second_chart_ok(self):
-        for i in irange(101,301):
-            _, difficulty, _ = self.dataset[i]
+        for i in irange(0,200):
+            _, difficulty, _ = self.subject(i, chart=1)
             self.assertEqual(difficulty[7], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
+
     def test_frames_second_chart_ok(self):
-        for i in irange(101,301):
-            frames, _, _ = self.dataset[i]
-            b = i-101
-            f = self.context_around(b+150)
+        for i in irange(0,200):
+            frames, _, _ = self.subject(i, chart=1)
+            f = self.context_around(i+150)
             np.testing.assert_array_equal(frames, f)
 
     def test_steps_second_chart_ok(self):
         step_indices = set()
 
-        for i in irange(101,301):
-            _, _, y = self.dataset[i]
+        for i in irange(0,200):
+            _, _, y = self.subject(i, chart=1)
             if y:
                 step_indices.add(i)
 
         self.assertEqual(len(step_indices), 4)
-        self.assertEqual(step_indices, {101, 201, 226, 301})
+        self.assertEqual(step_indices, {0, 100, 125, 200})
 
     ## third chart
 
     def test_difficulty_third_chart_ok(self):
-        for i in irange(302, 792):
-            _, difficulty, _ = self.dataset[i]
+        for i in irange(0, 490):
+            _, difficulty, _ = self.subject(i, chart=2)
             self.assertEqual(difficulty[11], 1)
             self.assertEqual(np.sum(difficulty), 1)
 
     def test_steps_third_chart_ok(self):
         step_indices = set()
 
-        for i in irange(302, 792):
-            _, _, y = self.dataset[i]
+        for i in irange(0, 490):
+            _, _, y = self.subject(i, chart=2)
 
             if y:
                 step_indices.add(i)
 
-        self.assertEqual(step_indices, {302, 351, 792})
+        self.assertEqual(step_indices, {0, 49, 490})
 
     def test_frames_third_chart_ok(self):
-        for i in irange(302,792):
-            frames, _, _, = self.dataset[i]
-            b = i-302
-            f = self.context_around(b+1)
+        for i in irange(0, 490):
+            frames, _, _, = self.subject(i, chart=2)
+            f = self.context_around(i+1)
             np.testing.assert_array_equal(frames, f)
 
+class TestPerChartDataset(unittest.TestCase):
+    def setUp(self):
+        stepfiles, audios, _ = sample_input()
+
+        self.charts = [chart for stepfile in stepfiles for chart in stepfile.charts]
+        self.features = audios[0]
+        self.dataset = loading.ppc.PPC_LSTMOnsetDataset(stepfiles, audios, 1)
+
+    def test_len_ok(self):
+        self.assertEqual(len(self.dataset), 793)
+
+    def test_first_chart_ok(self):
+        for i in irange(0, 100):
+            x1, difficulty1, y1 = self.dataset[i]
+            x2, difficulty2, y2 = loading.ppc.lstm_onset_getitem(self.charts[0], self.features, i, 1)
+
+            np.testing.assert_array_equal(x1, x2)
+            np.testing.assert_array_equal(difficulty1, difficulty2)
+            np.testing.assert_array_equal(y1, y2)
+
+    def test_second_chart_ok(self):
+        for i in irange(0, 200):
+            x1, difficulty1, y1 = self.dataset[i+101]
+            x2, difficulty2, y2 = loading.ppc.lstm_onset_getitem(self.charts[1], self.features, i, 1)
+
+            np.testing.assert_array_equal(x1, x2)
+            np.testing.assert_array_equal(difficulty1, difficulty2)
+            np.testing.assert_array_equal(y1, y2)
+
+    def test_difficulty_third_chart_ok(self):
+        for i in irange(0, 490):
+            x1, difficulty1, y1 = self.dataset[i+302]
+            x2, difficulty2, y2 = loading.ppc.lstm_onset_getitem(self.charts[2], self.features, i, 1)
+
+            np.testing.assert_array_equal(x1, x2)
+            np.testing.assert_array_equal(difficulty1, difficulty2)
+            np.testing.assert_array_equal(y1, y2)
 
 class TestLSTMOnsetDatasetUnrollN(unittest.TestCase):
 

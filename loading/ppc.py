@@ -77,7 +77,7 @@ class PPC_LSTMOnsetDataset(PerChartDataset):
     """
     def __init__(self, stepfiles: list[RefinedStepFile], features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
         super().__init__(
-            chartlen=lambda chart: _lstm_onset_chart_len(chart, unroll_length),
+            chartlen=lambda chart: lstm_onset_chart_len(chart, unroll_length),
             getitem=lambda chart, features, index: transform(lstm_onset_getitem(chart, features, index, unroll_length)),
             stepfiles=stepfiles,
             features=features
@@ -89,12 +89,14 @@ def chart_first_frame(chart: RefinedChart) -> int:
 def chart_last_frame(chart: RefinedChart) -> int:
     return floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
 
-def _lstm_onset_chart_len(chart: RefinedChart, unroll_length: int) -> int:
+def lstm_onset_chart_len(chart: RefinedChart, unroll_length: int) -> int:
     frame_count = chart_last_frame(chart) - chart_first_frame(chart) + 1
 
     return frame_count // unroll_length + (frame_count % unroll_length != 0)
 
 def lstm_onset_getitem(chart, music_frames, index, unroll_length):
+    assert index < lstm_onset_chart_len(chart, unroll_length)
+
     block_first_frame = index * unroll_length + chart_first_frame(chart)
 
     # inclusive
