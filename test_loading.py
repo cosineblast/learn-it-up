@@ -297,6 +297,75 @@ class TestMaskAndPaddingTransformWorks(unittest.TestCase):
             self.assertEqual(y.shape, (20,))
             self.assertEqual(mask.shape, (20,))
 
+class TestStepSelectionDataset(unittest.TestCase):
+    def setUp(self):
+        raw_chart = ssc_util.Chart(
+            NOTES = [
+                [ '10000', '00100', '01000', '00100' ],
+                [ '10000', '10000',
+                  '00100', '00100',
+                  '01000', '01000',
+                  '00100', '00100'
+              ],
+            ],
+            OFFSET = 0.0,
+            BPMS = [(0.0, 120.0)],
+            DESCRIPTION = 'S11',
+            CREDIT = 'test',
+            TIMESIGNATURES = [(0.0, 4.0, 4.0)],
+            STOPS = [],
+            DELAYS = [],
+            WARPS = [],
+            FAKES = [],
+        )
+
+        self.chart = ssc_util.refine_chart(raw_chart)    
+
+    def test_len_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
+
+        self.assertEqual(len(dataset), len(self.chart.steps))
+
+    def test_first_input_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
+
+        x, delta, y = dataset[0]
+
+        self.assertEqual(np.sum(x), 0)
+        self.assertEqual(delta[0][0], 0.0)
+        self.assertEqual(delta[0][2], 1.0)
+
+    def test_x_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
+
+        for i in range(1, len(dataset)):
+            x, delta, y = dataset[i]
+            np.testing.assert_array_equal(x[0], loading.ppc.stepcode_to_bag_tensor(self.chart.steps[i-1].stepcode))
+
+    def test_delta_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
+
+        for i in range(1, len(dataset)):
+            x, delta, y = dataset[i]
+            self.assertEqual(delta[0][2], 0.0)
+
+    def test_y_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
+
+        for i in range(len(dataset)):
+            x, delta, y = dataset[i]
+            self.assertEqual(y, loading.ppc.stepcode_to_index(self.chart.steps[i].stepcode))
+
+
+
+
+
+
 import ssc_util
 import models.ppc
 import torch
