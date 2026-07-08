@@ -89,7 +89,7 @@ def chart_first_frame(chart: RefinedChart) -> int:
 def chart_last_frame(chart: RefinedChart) -> int:
     return floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
 
-def lstm_onset_chart_len(chart: RefinedChart, unroll_length: int) -> int:
+def lstm_onset_chart_len(chart: RefinedChart, unroll_length: int = 1) -> int:
     frame_count = chart_last_frame(chart) - chart_first_frame(chart) + 1
 
     return frame_count // unroll_length + (frame_count % unroll_length != 0)
@@ -288,7 +288,7 @@ def _find_average_bpm_nps(stepfiles: list[RefinedStepFile]) -> PPC_AlignedOnsetD
 
     return PPC_AlignedOnsetDataset.Stats(bpm_mean=bpm_mean, bpm_std=bpm_std, nps_mean=nps_mean, nps_std=nps_std)
 
-class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
+class PPC_SelectionLSTMDataset(PerChartDataset):
     """
     The dataset for the LSTM selection model. 
 
@@ -309,49 +309,24 @@ class PPC_SelectionLSTMDataset(torch.utils.data.Dataset):
         # this way, we solve a todo in the original ddc:
         # "first sequence incredibly unlikely to appear, balance this"
 
-        # in order to locate the stepfile, chart and steps of the given block index, we store
-        # the prefix sum array of the block count of each file, and run a binary search to locate
-        # the right chart
+        super().__init__(
+            chartlen=lambda chart: len(chart.steps),
+            getitem=lambda chart, features, index: transform(lstm_selection_getitem(chart, index,unroll_length)),
+            stepfiles=stepfiles,
+            features=[() for _ in stepfiles]
+        )
 
-        charts = [chart for stepfile in stepfiles for chart in stepfile.charts]
-        chart_step_counts = [len(chart.steps) for chart in charts]
-        chart_block_counts = [length // unroll_length + int(length % unroll_length != 0) for length in chart_step_counts]
+def lstm_selection_getitem(chart, index, unroll_length):
+    block_index = index
 
-        len_blocks = sum(chart_block_counts) 
+    start_index = block_index * unroll_length
+    end_index =  (block_index + 1) * unroll_length
+    block = chart.steps[start_index : end_index]
 
-        self.unroll_length = unroll_length
-        self.len_blocks = len_blocks
-        self.charts = charts
-        self.stepfiles = stepfiles
-        self.chart_block_counts = chart_block_counts
-        self.chart_block_counts_sum = list(itertools.accumulate(chart_block_counts))
-        self.transform = transform
+    # block length may be shorter than unroll_length
+    end_index = start_index + len(block)
 
-    def __len__(self) -> int:
-        return self.len_blocks
-
-    def _get_target_chart_index(self, target_index: int) -> tuple[int, int]:
-        return _binary_search_index(self.chart_block_counts_sum, target_index)
-
-    def __getitem__(self, index: int):
-        target_index = index
-        assert isinstance(target_index, int)
-        assert target_index < len(self)
-
-        chart_index, total_before_chart = self._get_target_chart_index(target_index)
-
-        chart = self.charts[chart_index]
-
-        block_index = target_index - total_before_chart
-
-        start_index = block_index * self.unroll_length
-        end_index =  (block_index + 1) * self.unroll_length
-        block = chart.steps[start_index : end_index]
-
-        # block length may be shorter than unroll_length
-        end_index = start_index + len(block)
-
-        return self.transform(steps_to_model_input(chart.steps, start_index, end_index))
+    return steps_to_model_input(chart.steps, start_index, end_index)
 
 def _binary_search_index(sums, target_index: int) -> tuple[int, int]:
     """
