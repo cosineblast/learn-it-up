@@ -18,6 +18,27 @@ from ssc_util import RefinedStepFile, RefinedChart, StepInfo
 CONTEXT_RADIUS = loading.CONTEXT_RADIUS
 FRAMES_PER_SECOND = 100 
 
+class PerChartDataset(torch.utils.data.Dataset):
+    def __init__(self, *, chartlen, getitem, stepfiles: list[RefinedStepFile], features: list[FeatureView]):
+        charts_and_frames = [(chart, frames) for stepfile, frames in zip(stepfiles, features) for chart in stepfile.charts]
+        lengths = [chartlen(chart) for chart, _ in charts_and_frames]
+        lengths_sums = list(itertools.accumulate(lengths))
+        total_length = sum(lengths)
+
+        self.chartlen, self.getitem = chartlen, getitem
+        self.features, self.stepfiles = features, stepfiles
+        self.charts_and_frames = charts_and_frames
+        self.lengths = lengths
+        self.lengths_sums = lengths_sums
+        self.total_length = total_length
+
+    def __getitem__(self, index):
+        chart_index, before_chart = _binary_search_index(self.lengths_sums, index)
+        return self.getitem(*self.charts_and_frames[chart_index], index - before_chart)
+
+    def __len__(self):
+        return self.total_length
+
 class PPC_CNNOnsetDataset(torch.utils.data.Dataset):
     """
     The dataset for the CNN onset model. 
@@ -42,7 +63,7 @@ class PPC_CNNOnsetDataset(torch.utils.data.Dataset):
 
 ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
 
-class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
+class PPC_LSTMOnsetDataset(PerChartDataset):
     """
     The dataset for the C-LSTM onset model. 
 
@@ -54,134 +75,101 @@ class PPC_LSTMOnsetDataset(torch.utils.data.Dataset):
     - Difficulty: (25,) np tensor containing the one-hot difficulty for the returned frames
     - y: (N,) bool np tensor determining whether the frames are step or not
     """
-    def __init__(self, stepfiles: list[RefinedStepFile], all_features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
-        # For more information on how data is stored in this class, see the LSTM selection model class
+    def __init__(self, stepfiles: list[RefinedStepFile], features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
+        super().__init__(
+            chartlen=lambda chart: _lstm_onset_chart_len(chart, unroll_length),
+            getitem=lambda chart, features, index: transform(lstm_onset_getitem(chart, features, index, unroll_length)),
+            stepfiles=stepfiles,
+            features=features
+        )
 
-        def get_chart_stats(chart: RefinedChart, stepfile_index: int):
-            # these are inclusive
-            first_frame_index = floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
-            last_frame_index = floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
+def chart_first_frame(chart: RefinedChart) -> int:
+    return floor(chart.steps[0].time_in_seconds * FRAMES_PER_SECOND)
 
-            len_frames = last_frame_index - first_frame_index + 1
+def chart_last_frame(chart: RefinedChart) -> int:
+    return floor(chart.steps[-1].time_in_seconds * FRAMES_PER_SECOND)
 
-            assert len(chart.steps) >= 2
-            assert first_frame_index >= 0
-            assert last_frame_index < all_features[stepfile_index].len
-            assert first_frame_index < last_frame_index
+def _lstm_onset_chart_len(chart: RefinedChart, unroll_length: int) -> int:
+    frame_count = chart_last_frame(chart) - chart_first_frame(chart) + 1
 
-            return ChartBlockStats(len_frames // unroll_length + (len_frames % unroll_length != 0),
-                                    first_frame_index,
-                                    last_frame_index,
-                                    stepfile_index)
+    return frame_count // unroll_length + (frame_count % unroll_length != 0)
 
-        charts = [(chart, stepfile_index)
-            for stepfile_index, stepfile in enumerate(stepfiles) for chart in stepfile.charts]
+def lstm_onset_getitem(chart, music_frames, index, unroll_length):
+    block_first_frame = index * unroll_length + chart_first_frame(chart)
 
-        chart_stats = [get_chart_stats(chart, index) for chart,index in charts]
-        block_counts = list(stat.len_blocks for stat in chart_stats)
+    # inclusive
+    block_last_frame = block_first_frame + unroll_length-1
+    block_last_frame = min(block_last_frame, chart_last_frame(chart))
 
-        self.charts_and_stepfiles = charts
-        self.chart_stats = chart_stats
-        self.len_blocks = sum(stat.len_blocks for stat in chart_stats) 
-        self.all_features = all_features 
-        self.stepfiles = stepfiles
-        self.chart_lens = block_counts
-        self.chart_len_sums = list(itertools.accumulate(block_counts))
-        self.transform = transform
-        self.unroll_length = unroll_length
+    frames = _lstm_onset_frame_context(music_frames, block_first_frame, block_last_frame)
 
-    def __len__(self) -> int:
-        return self.len_blocks
+    block_length = block_last_frame - block_first_frame + 1
+    difficulty = np.zeros(25)
+    difficulty[chart.difficulty-1] = 1.0
 
-    def _get_target_chart_index(self, target_index: int) -> tuple[int, int]:
-        return _binary_search_index(self.chart_len_sums, target_index)
+    first_next_step = _lstm_onset_next_step_index(chart.steps, block_first_frame)
+    last_next_step = _lstm_onset_next_step_index(chart.steps, block_last_frame)
 
-    def _get_frame_context(self, view: FeatureView, first_frame: int, last_frame: int) -> np.ndarray:
-        array, start, length = view
+    # since first_next_step and last_next_step are limited by the last step in the file,
+    # there must always be a step >= it
+    assert first_next_step is not None
+    assert last_next_step is not None, f"at index {index}, chart={chart}: expected to have next step"
 
-        result = []
-        for feature_index in range(first_frame, last_frame+1):
-            a = start+feature_index-CONTEXT_RADIUS
-            b = start+feature_index+CONTEXT_RADIUS+1
-            result.append(array[a:b])
+    step_indices = np.array([int(step.time_in_seconds * FRAMES_PER_SECOND) - block_first_frame
+                            for step in chart.steps[first_next_step:last_next_step+1]],
+                            dtype=int)
 
-        return np.stack(result)
+    step_indices_ok = (0 <= step_indices) & (step_indices < block_length)
 
-    def _get_next_step_index(self, steps: list[StepInfo], target_index: int) -> int | None:
-        if steps[0].time_in_seconds * FRAMES_PER_SECOND >= target_index:
-            return 0
+    is_step = np.zeros(block_length, dtype=bool)
+    is_step[step_indices[step_indices_ok]] = True
+    
+    return (frames, difficulty, is_step)
 
-        if steps[-1].time_in_seconds * FRAMES_PER_SECOND < target_index:
-            return None
+def _lstm_onset_frame_context(view: FeatureView, first_frame: int, last_frame: int) -> np.ndarray:
+    array, start, length = view
 
-        l = 0
-        r = len(steps)-1
+    result = []
+    for feature_index in range(first_frame, last_frame+1):
+        a = start+feature_index-CONTEXT_RADIUS
+        b = start+feature_index+CONTEXT_RADIUS+1
+        result.append(array[a:b])
 
-        assert not (steps[l].time_in_seconds * FRAMES_PER_SECOND >= target_index)
-        assert steps[r].time_in_seconds * FRAMES_PER_SECOND >= target_index
+    return np.stack(result)
 
-        while l+1!=r:
-            m = (l + r) // 2
+def _lstm_onset_next_step_index(steps: list[StepInfo], target_index: int) -> int | None:
+    if steps[0].time_in_seconds * FRAMES_PER_SECOND >= target_index:
+        return 0
 
-            if steps[m].time_in_seconds * FRAMES_PER_SECOND >= target_index:
-                r = m
-            else:
-                l = m
-                
-        assert not (steps[l].time_in_seconds * FRAMES_PER_SECOND >= target_index)
-        assert steps[r].time_in_seconds * FRAMES_PER_SECOND >= target_index
+    if steps[-1].time_in_seconds * FRAMES_PER_SECOND < target_index:
+        return None
 
-        return r
+    l = 0
+    r = len(steps)-1
+
+    assert not (steps[l].time_in_seconds * FRAMES_PER_SECOND >= target_index)
+    assert steps[r].time_in_seconds * FRAMES_PER_SECOND >= target_index
+
+    while l+1!=r:
+        m = (l + r) // 2
+
+        if steps[m].time_in_seconds * FRAMES_PER_SECOND >= target_index:
+            r = m
+        else:
+            l = m
+            
+    assert not (steps[l].time_in_seconds * FRAMES_PER_SECOND >= target_index)
+    assert steps[r].time_in_seconds * FRAMES_PER_SECOND >= target_index
+
+    return r
 
 
-    def __getitem__(self, index: int):
-        target_index = index
-        assert isinstance(target_index, int)
-        assert target_index < len(self)
-
-        chart_index, total_blocks_before_chart = self._get_target_chart_index(target_index)
-
-        stats = self.chart_stats[chart_index]
-        chart, stepfile_index = self.charts_and_stepfiles[chart_index]
-        file_features = self.all_features[stepfile_index]
-
-        block_index = target_index - total_blocks_before_chart
-
-        block_first_frame = block_index * self.unroll_length + stats.first_frame_index
-
-        # inclusive
-        block_last_frame = block_first_frame + self.unroll_length-1
-        block_last_frame = min(block_last_frame, stats.last_frame_index)
-
-        frames = self._get_frame_context(file_features, block_first_frame, block_last_frame)
-
-        block_length = block_last_frame - block_first_frame + 1
-        difficulty = np.zeros(25)
-        difficulty[chart.difficulty-1] = 1.0
-
-        first_next_step = self._get_next_step_index(chart.steps, block_first_frame)
-        last_next_step = self._get_next_step_index(chart.steps, block_last_frame)
-
-        # since first_next_step and last_next_step are limited by the last step in the file,
-        # there must always be a step >= it
-        assert first_next_step is not None
-        assert last_next_step is not None, f"at index {target_index}, chart={chart_index}: expected to have next step"
-
-        step_indices = np.array([int(step.time_in_seconds * FRAMES_PER_SECOND) - block_first_frame
-                                for step in chart.steps[first_next_step:last_next_step+1]],
-                                dtype=int)
-
-        step_indices_ok = (0 <= step_indices) & (step_indices < block_length)
-
-        is_step = np.zeros(block_length, dtype=bool)
-        is_step[step_indices[step_indices_ok]] = True
-        
-        return self.transform((frames, difficulty, is_step))
 
 from dataclasses import dataclass
 
 class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
 
+    # TODO: move normalization into transform (duh)
     @dataclass
     class Stats:
         nps_mean: float

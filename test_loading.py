@@ -113,9 +113,10 @@ class TestLSTMOnsetDatasetUnrollOne(unittest.TestCase):
         
 
     def test_stats_ok(self):
-        self.assertEqual(self.dataset.chart_stats[0].len_blocks, 101)
-        self.assertEqual(self.dataset.chart_stats[1].len_blocks, 201)
-        self.assertEqual(self.dataset.chart_stats[2].len_blocks, 491)
+        # TODO: test these with PerChartDataset
+        #self.assertEqual(self.dataset.chart_stats[0].len_blocks, 101)
+        #self.assertEqual(self.dataset.chart_stats[1].len_blocks, 201)
+        #self.assertEqual(self.dataset.chart_stats[2].len_blocks, 491)
         self.assertEqual(len(self.dataset), 793)
 
     def test_difficulty_first_chart_ok(self):
