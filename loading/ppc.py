@@ -169,7 +169,7 @@ def _lstm_onset_next_step_index(steps: list[StepInfo], target_index: int) -> int
 
 from dataclasses import dataclass
 
-class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
+class PPC_AlignedOnsetDataset(PerChartDataset):
 
     # TODO: move normalization into transform (duh)
     @dataclass
@@ -192,88 +192,66 @@ class PPC_AlignedOnsetDataset(torch.utils.data.Dataset):
     - y: (N x 48) bool np tensor with the onsets for the given beats
     """
     def __init__(self, stepfiles: list[RefinedStepFile], all_features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
-        def get_chart_block_count(chart: RefinedChart) -> int:
-            first_beat_index = 0
-            last_beat_index = floor(chart.steps[-1].time_in_beats)
-
-            len_beats = last_beat_index - first_beat_index + 1
-
-            assert len(chart.steps) >= 2
-            assert first_beat_index <= last_beat_index
-
-            return len_beats // unroll_length + (len_beats % unroll_length != 0)
-
-        charts = [(chart, stepfile_index)
-            for stepfile_index, stepfile in enumerate(stepfiles) for chart in stepfile.charts]
-
-        block_counts = [get_chart_block_count(chart) for chart,_ in charts]
-
-        self.charts_and_stepfiles = charts
-        self.len_blocks = sum(block_counts) 
-        self.all_features = all_features 
-        self.stepfiles = stepfiles
-        self.chart_len_sums = list(itertools.accumulate(block_counts))
-        self.transform = transform
-        self.unroll_length = unroll_length
         self.stats = _find_average_bpm_nps(stepfiles)
 
-    def __len__(self) -> int:
-        return self.len_blocks
+        super().__init__(
+            chartlen=lambda chart: aligned_onset_chart_len(chart, unroll_length),
+            getitem=lambda chart, features, index: transform(aligned_onset_getitem(chart, features, index, unroll_length, self.stats)),
+            stepfiles=stepfiles,
+            features=all_features,
+        )
 
-    def _get_target_chart_index(self, target_index: int) -> tuple[int, int]:
-        return _binary_search_index(self.chart_len_sums, target_index)
+def aligned_onset_chart_len(chart: RefinedChart, unroll_length: int) -> int:
+    first_beat_index = 0
+    last_beat_index = floor(chart.steps[-1].time_in_beats)
 
-    def _get_beat_context(self, chart: RefinedChart, view: FeatureView, first_beat: int, last_beat: int) -> np.ndarray:
-        array, start, length = view
+    len_beats = last_beat_index - first_beat_index + 1
 
-        slice = array[start:start+length]
-        resampled = audio_util.resample_features(slice, chart.beat_start_end_times)
+    assert len(chart.steps) >= 2
+    assert first_beat_index <= last_beat_index
 
-        default_value = np.min(slice, axis=0)
-        padding = np.tile(default_value.reshape((1, 1, 80, 3)), (2, 32, 1, 1))
-        padded = np.concat([padding, resampled, padding])
-        offset = 2
-       
-        result = []
-        for beat_index in range(first_beat, last_beat+1):
-            a = beat_index - 2
-            b = beat_index + 2 +1
-            result.append(padded[a+offset:b+offset])
+    return len_beats // unroll_length + (len_beats % unroll_length != 0)
 
-        return np.stack(result)
+def aligned_onset_getitem(chart, features, block_index, unroll_length, stats):
+    chart_first_beat = 0
+    chart_last_beat = floor(chart.steps[-1].time_in_beats)
 
-    def __getitem__(self, index: int):
-        target_index = index
-        assert isinstance(target_index, int)
-        assert target_index < len(self)
+    block_first_beat = block_index * unroll_length + chart_first_beat
+    block_last_beat = block_first_beat + unroll_length-1
+    block_last_beat = min(block_last_beat, chart_last_beat)
 
-        chart_index, total_blocks_before_chart = self._get_target_chart_index(target_index)
+    beat_frames = _get_aligned_beat_context(chart, features, block_first_beat, block_last_beat)
 
-        chart, stepfile_index = self.charts_and_stepfiles[chart_index]
-        features = self.all_features[stepfile_index]
+    block_length = block_last_beat - block_first_beat + 1
 
-        chart_first_beat = 0
-        chart_last_beat = floor(chart.steps[-1].time_in_beats)
+    nps = chart.nps
+    nps = (nps - stats.nps_mean) / stats.nps_std
 
-        block_index = target_index - total_blocks_before_chart
+    bpms = np.array(chart.beat_bpms[block_first_beat:block_last_beat+1])
+    bpms = (bpms - stats.bpm_mean) / stats.bpm_std
 
-        block_first_beat = block_index * self.unroll_length + chart_first_beat
-        block_last_beat = block_first_beat + self.unroll_length-1
-        block_last_beat = min(block_last_beat, chart_last_beat)
+    onsets = np.array(chart.beat_onset_vectors[block_first_beat:block_last_beat+1], dtype=bool)
+    
+    return (beat_frames, nps, bpms, onsets)
 
-        beat_frames = self._get_beat_context(chart, features, block_first_beat, block_last_beat)
+def _get_aligned_beat_context(chart: RefinedChart, view: FeatureView, first_beat: int, last_beat: int) -> np.ndarray:
+    array, start, length = view
 
-        block_length = block_last_beat - block_first_beat + 1
+    slice = array[start:start+length]
+    resampled = audio_util.resample_features(slice, chart.beat_start_end_times)
 
-        nps = chart.nps
-        nps = (nps - self.stats.nps_mean) / self.stats.nps_std
+    default_value = np.min(slice, axis=0)
+    padding = np.tile(default_value.reshape((1, 1, 80, 3)), (2, 32, 1, 1))
+    padded = np.concat([padding, resampled, padding])
+    offset = 2
+   
+    result = []
+    for beat_index in range(first_beat, last_beat+1):
+        a = beat_index - 2
+        b = beat_index + 2 +1
+        result.append(padded[a+offset:b+offset])
 
-        bpms = np.array(chart.beat_bpms[block_first_beat:block_last_beat+1])
-        bpms = (bpms - self.stats.bpm_mean) / self.stats.bpm_std
-
-        onsets = np.array(chart.beat_onset_vectors[block_first_beat:block_last_beat+1], dtype=bool)
-        
-        return self.transform((beat_frames, nps, bpms, onsets))
+    return np.stack(result)
 
 def _find_average_bpm_nps(stepfiles: list[RefinedStepFile]) -> PPC_AlignedOnsetDataset.Stats:
     bpms = [chart.avg_bpm for file in stepfiles for chart in file.charts]
