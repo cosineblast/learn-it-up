@@ -170,14 +170,6 @@ def _lstm_onset_next_step_index(steps: list[StepInfo], target_index: int) -> int
 from dataclasses import dataclass
 
 class PPC_AlignedOnsetDataset(PerChartDataset):
-
-    # TODO: move normalization into transform (duh)
-    @dataclass
-    class Stats:
-        nps_mean: float
-        nps_std: float
-        bpm_mean: float
-        bpm_std: float
         
     """
     The dataset for the aligned C-LSTM onset model. 
@@ -192,11 +184,9 @@ class PPC_AlignedOnsetDataset(PerChartDataset):
     - y: (N x 48) bool np tensor with the onsets for the given beats
     """
     def __init__(self, stepfiles: list[RefinedStepFile], all_features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
-        self.stats = _find_average_bpm_nps(stepfiles)
-
         super().__init__(
             chartlen=lambda chart: aligned_onset_chart_len(chart, unroll_length),
-            getitem=lambda chart, features, index: transform(aligned_onset_getitem(chart, features, index, unroll_length, self.stats)),
+            getitem=lambda chart, features, index: transform(aligned_onset_getitem(chart, features, index, unroll_length)),
             stepfiles=stepfiles,
             features=all_features,
         )
@@ -212,7 +202,7 @@ def aligned_onset_chart_len(chart: RefinedChart, unroll_length: int) -> int:
 
     return len_beats // unroll_length + (len_beats % unroll_length != 0)
 
-def aligned_onset_getitem(chart, features, block_index, unroll_length, stats):
+def aligned_onset_getitem(chart, features, block_index, unroll_length):
     chart_first_beat = 0
     chart_last_beat = floor(chart.steps[-1].time_in_beats)
 
@@ -225,10 +215,7 @@ def aligned_onset_getitem(chart, features, block_index, unroll_length, stats):
     block_length = block_last_beat - block_first_beat + 1
 
     nps = chart.nps
-    nps = (nps - stats.nps_mean) / stats.nps_std
-
     bpms = np.array(chart.beat_bpms[block_first_beat:block_last_beat+1])
-    bpms = (bpms - stats.bpm_mean) / stats.bpm_std
 
     onsets = np.array(chart.beat_onset_vectors[block_first_beat:block_last_beat+1], dtype=bool)
     
@@ -253,7 +240,41 @@ def _get_aligned_beat_context(chart: RefinedChart, view: FeatureView, first_beat
 
     return np.stack(result)
 
-def _find_average_bpm_nps(stepfiles: list[RefinedStepFile]) -> PPC_AlignedOnsetDataset.Stats:
+@dataclass
+class AlignedOnsetDatasetStats:
+    bpm_mean: float
+    bpm_std: float
+    nps_mean: float
+    nps_std: float
+
+    @staticmethod
+    def from_stepfiles(stepfiles: list[RefinedStepFile]):
+        bpms = [chart.avg_bpm for file in stepfiles for chart in file.charts]
+        bpm_mean = float(np.mean(bpms))
+        bpm_std = float(np.std(bpms))
+        bpm_std = 1 if bpm_std == 0 else bpm_std
+
+        npss = [chart.nps for file in stepfiles for chart in file.charts]
+        nps_mean = float(np.mean(npss))
+        nps_std = float(np.std(npss))
+        nps_std = 1 if nps_std == 0 else nps_std
+
+        return AlignedOnsetDatasetStats(bpm_mean=bpm_mean, bpm_std=bpm_std, nps_mean=nps_mean, nps_std=nps_std)
+
+def AlignedNormalizedStatsTransform(stats: AlignedOnsetDatasetStats):
+
+    def run(stuff):
+        x, nps, bpms, y = stuff
+
+        nps = (nps - stats.nps_mean) / stats.nps_std
+        bpms = (bpms - stats.bpm_mean) / stats.bpm_std
+
+        return x, nps, bpms, y
+
+    return run
+
+
+def _find_average_bpm_nps(stepfiles: list[RefinedStepFile]) -> AlignedOnsetDatasetStats:
     bpms = [chart.avg_bpm for file in stepfiles for chart in file.charts]
     bpm_mean = float(np.mean(bpms))
     bpm_std = float(np.std(bpms))

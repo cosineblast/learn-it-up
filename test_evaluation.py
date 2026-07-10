@@ -1,7 +1,7 @@
 
 import unittest
 import loading
-from loading.ppc import PPC_AlignedOnsetDataset
+from loading.ppc import AlignedOnsetDatasetStats
 import numpy as np
 import torch
 
@@ -221,7 +221,7 @@ class TestAlignedEvaluation(unittest.TestCase):
             FAKES = [],
         )
 
-        self.stats = PPC_AlignedOnsetDataset.Stats(
+        self.stats = AlignedOnsetDatasetStats(
             bpm_mean=120.0,
             bpm_std=1.0,
             nps_mean=2.0,

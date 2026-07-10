@@ -172,7 +172,7 @@ def measure_selection_performance(model, chart, loss_fn, device):
     
 import loading.ppc
 
-def measure_aligned_onset_performance(model, chart, features, loss_fn, stats: loading.ppc.PPC_AlignedOnsetDataset.Stats, device):
+def measure_aligned_onset_performance(model, chart, features, loss_fn, stats: loading.ppc.AlignedOnsetDatasetStats, device):
     x, nps, bpms = get_aligned_onset_input(features, chart, stats)
     ys = get_aligned_onset_expected_output(chart)
 

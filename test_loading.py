@@ -416,19 +416,23 @@ class TestAlignedPPCDataset(unittest.TestCase):
     def test_stats_ok(self):
         stepfiles = [stepfile_of([self.chart])]
         features = [self.audio_view]
-        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2)
+
+        stats = loading.ppc.AlignedOnsetDatasetStats.from_stepfiles(stepfiles)
 
         self.assertAlmostEqual(self.chart.avg_bpm, 120.0)
 
-        self.assertAlmostEqual(dataset.stats.bpm_mean, 120.0)
-        self.assertAlmostEqual(dataset.stats.bpm_std, 1.0)
-        self.assertAlmostEqual(dataset.stats.nps_mean, 3.0, delta=0.5)
-        self.assertAlmostEqual(dataset.stats.nps_std, 1.0)
+        self.assertAlmostEqual(stats.bpm_mean, 120.0)
+        self.assertAlmostEqual(stats.bpm_std, 1.0)
+        self.assertAlmostEqual(stats.nps_mean, 3.0, delta=0.5)
+        self.assertAlmostEqual(stats.nps_std, 1.0)
 
     def test_bpm_nps_ok(self):
         stepfiles = [stepfile_of([self.chart])]
         features = [self.audio_view]
-        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2)
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2, transform=
+                                                      loading.ppc.AlignedNormalizedStatsTransform(
+                                                          loading.ppc.AlignedOnsetDatasetStats.from_stepfiles(stepfiles)
+                                                      ))
 
         x, nps, bpm, y = dataset[0]
 
