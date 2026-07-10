@@ -172,15 +172,16 @@ def measure_selection_performance(model, chart, loss_fn, device):
     
 import loading.ppc
 
-def measure_aligned_onset_performance(model, chart, features, loss_fn, stats: loading.ppc.AlignedOnsetDatasetStats, device):
-    x, nps, bpms = get_aligned_onset_input(features, chart, stats)
-    ys = get_aligned_onset_expected_output(chart)
+def measure_aligned_onset_performance(model, chart, features, loss_fn, *, transform=(lambda x:x), device='cpu'):
+    beat_count = floor(chart.steps[-1].time_in_beats)+1
+
+    x, nps, bpms, ys = transform(loading.ppc.aligned_onset_getitem(chart, features, 0, beat_count))
 
     with torch.no_grad():
         log_scores = model(
-            torch.tensor(x).float().to(device),
-            torch.tensor(nps).float().to(device),
-            torch.tensor(bpms).float().to(device)
+            torch.tensor(x)[None, :].float().to(device),
+            torch.tensor([nps]).float().to(device),
+            torch.tensor(bpms)[None, :].float().to(device)
         )
 
         loss = loss_fn(
@@ -225,47 +226,6 @@ def beat_scores_to_frame_scores(chart, beat_scores, frame_count):
     for i in range(len(frame_scores)):
         result[i] = frame_scores[i]
     return result
-
-
-        
-
-def get_aligned_onset_input(features, chart, stats):
-    import audio_util
-    # refactor this and loader implementation into separate function
-    array, start, len = features
-    
-    slice = array[start:len]
-    default_value = np.min(slice, axis=0)
-
-    resampled = audio_util.resample_features(slice, chart.beat_start_end_times)
-
-    padding = np.tile(default_value.reshape((1, 1, 80, 3)), (2, 32, 1, 1))
-    padded = np.concat([padding, resampled, padding])
-    offset = 2
-
-    result = []
-
-    beat_count = floor(chart.steps[-1].time_in_beats)+1
-
-    for beat_index in range(beat_count):
-        a = beat_index - 2
-        b = beat_index + 2 +1
-        result.append(padded[a+offset:b+offset])
-
-    x = np.array(result)[None, :]
-    nps = np.array([chart.nps])
-    bpms = np.array(chart.beat_bpms[:beat_count])[None, :]
-
-    nps = (nps - stats.nps_mean) / stats.nps_std
-    bpms = (bpms - stats.bpm_mean) / stats.bpm_std
-
-    return x, nps, bpms
-
-def get_aligned_onset_expected_output(chart):
-    beat_count = floor(chart.steps[-1].time_in_beats)+1
-
-    return np.array(chart.beat_onset_vectors[:beat_count], dtype=bool)
-
 
 def evaluate_frame_onset_performance(real_onsets, scores, ys, mean_loss):
     pred_onsets = _get_pred_onsets(scores)
