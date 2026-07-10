@@ -381,6 +381,7 @@ class TestAlignedPPCDataset(unittest.TestCase):
         padding = np.ones((64, 80, 3)) * DEFAULT_VALUE
         padded_audio = np.concat([padding, audio, padding])
 
+        self.audio = audio
         self.audio_view = loading.FeatureView(padded_audio, 64, audio_len) 
 
         raw_chart = ssc_util.Chart(
@@ -404,6 +405,13 @@ class TestAlignedPPCDataset(unittest.TestCase):
         )
 
         self.chart = ssc_util.refine_chart(raw_chart)
+
+    def test_len_works(self):
+        stepfiles = [stepfile_of([self.chart])]
+        features = [self.audio_view]
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 2)
+
+        self.assertEqual(len(dataset), 4)
 
     def test_stats_ok(self):
         stepfiles = [stepfile_of([self.chart])]
@@ -448,6 +456,49 @@ class TestAlignedPPCDataset(unittest.TestCase):
         y = model(x, nps, bpm)
 
         self.assertEqual(y.shape, (x.shape[0], x.shape[1], 48))
+
+    def test_x_context_works(self):
+        stepfiles = [stepfile_of([self.chart])]
+        features = [self.audio_view]
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 1)
+
+        for i in range(1, len(dataset)):
+            x, _, _, _ = dataset[i]
+            x_prev, _, _, _ = dataset[i-1]
+            
+            np.testing.assert_array_equal(x[0, 1], x_prev[0, 2])
+
+        for i in range(len(dataset)-1):
+            x, _, _, _ = dataset[i]
+            x_next, _, _, _ = dataset[i+1]
+           
+            np.testing.assert_array_equal(x[0, 3], x_next[0, 2])
+
+        for i in range(2, len(dataset)):
+            x, _, _, _ = dataset[i]
+            x_prev, _, _, _ = dataset[i-2]
+            
+            np.testing.assert_array_equal(x[0, 0], x_prev[0, 2])
+
+        for i in range(len(dataset)-2):
+            x, _, _, _ = dataset[i]
+            x_next, _, _, _ = dataset[i+2]
+            
+            np.testing.assert_array_equal(x[0, 4], x_next[0, 2])
+            
+
+    def test_x_is_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        features = [self.audio_view]
+        dataset = loading.ppc.PPC_AlignedOnsetDataset(stepfiles, features, 1)
+
+        for beat in range(len(dataset)):
+            x, nps, bpm, y = dataset[beat]
+
+            self.assertEqual(x.shape, (1, 5, 32, 80, 3))
+
+            for i in range(32):
+                self.assertEqual(x[0, 2, i, 0, 0], int(50*beat + 50 * i/32))
 
 
 def irange(a, b):
