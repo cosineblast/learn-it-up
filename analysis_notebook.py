@@ -10,6 +10,8 @@ def _(mo):
     # Pump it Up Dataset Analysis
 
     This is the notebook where I play with the data as a REPL and do data analysis.
+
+    You need to run `main.py parse_all` first.
     """)
     return
 
@@ -78,7 +80,7 @@ def _(chartcounts, mo, np):
 
 @app.cell(hide_code=True)
 def _(chartcounts, plt):
-    p = plt.hist(chartcounts)
+    make_gray_and_black(hist=plt.hist(chartcounts))
     plt.title('Histogram of chart count of filtered stepfiles')
     return
 
@@ -166,16 +168,10 @@ def _(counts, diff_range, difficulties, np, plt):
 
     plt.xticks(diff_range)
 
-    _columns = plt.bar(diff_range, counts)
+    make_gray_and_black(bars=plt.bar(diff_range, counts))
 
     plt.hlines(np.arange(5.0, 60.0, 5.0), xmin=0.0, xmax=max_diff, linestyles='dotted')
     plt.yticks(np.arange(0.0, 60.0, 5.0))
-    _color1 = 'gray'
-    _color2 = 'lightgray'
-    _color = _color2
-    for column in _columns:
-        column.set_facecolor(_color)
-        _color = _color2 if _color == _color1 else _color1
 
     plt.title('Histogram of difficulties in dataset')
 
@@ -224,6 +220,55 @@ def _(author_counts, author_values, plt):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
+    ### Analyzing the discrepancy between the real song BPM and the presented chart BPM
+    """)
+    return
+
+
+@app.cell
+def _(stepfiles):
+    charts_with_displaybpm = [chart for stepfile in stepfiles for chart in stepfile.charts if 'DISPLAYBPM' in stepfile.info]
+    return (charts_with_displaybpm,)
+
+
+@app.cell
+def _(stepfiles):
+    displaybpms = [float(stepfile.info['DISPLAYBPM']) for stepfile in stepfiles for chart in stepfile.charts if 'DISPLAYBPM' in stepfile.info]
+    return (displaybpms,)
+
+
+@app.cell
+def _(charts_with_displaybpm, displaybpms, np):
+    ratios = [displaybpm / chart.avg_bpm for displaybpm, chart in zip(displaybpms, charts_with_displaybpm)]
+    ratios = np.array(ratios)
+    return (ratios,)
+
+
+@app.cell
+def _(np, ratios):
+    print('mean:', np.mean(ratios))
+    print('median:', np.median(ratios))
+    print('stddev:', np.std(ratios))
+    print('min:', np.min(ratios))
+    print('max:', np.max(ratios))
+    return
+
+
+@app.cell
+def _(np, plt, ratios):
+    make_gray_and_black(hist=plt.hist(ratios, np.arange(16)))
+    plt.title('Distribution of ratios between real BPM and chart BPM')
+    plt.xlabel('Ratio')
+    plt.xticks(np.arange(16))
+    plt.hlines(np.arange(25.0, 175.0, 25.0), xmin=0.0, xmax=16, linestyles='dotted')
+    plt.ylabel('Occurence Count')
+    plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
     # Appendix
     """)
     return
@@ -233,6 +278,23 @@ def _(mo):
 def _():
     md_list = lambda xs: '\n'.join(['- ' + f'`{element}`' for element in xs])
     return (md_list,)
+
+
+@app.function
+def make_gray_and_black(*, bars=None, hist=None):
+    assert bars is not None or hist is not None
+    
+    if hist is not None:
+        columns = hist[2]
+    else:
+        columns = bars
+    
+    color1 = 'gray'
+    color2 = 'lightgray'
+    color = color2
+    for column in columns:
+        column.set_facecolor(color)
+        color = color2 if color == color1 else color1
 
 
 @app.cell
