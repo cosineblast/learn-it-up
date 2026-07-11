@@ -46,7 +46,7 @@ from pathlib import Path
 from collections import namedtuple, defaultdict
 from typing import NamedTuple
 
-STEPFILE_KEYS = {"TITLE", "ARTIST", "MUSIC", "OFFSET", "BPMS", "TIMESIGNATURES"}
+STEPFILE_KEYS = {"TITLE", "ARTIST", "MUSIC", "OFFSET", "BPMS", "TIMESIGNATURES", "DISPLAYBPM"}
 
 CHART_KEYS = {
     "NOTES",
@@ -217,15 +217,14 @@ def _parse_equals_pair_list2(string: str) -> list[tuple[float, float]]:
     xs = _parse_equals_pair_list(string)
     for x in xs:
         assert len(x) == 2, f"expected this field to be a pair, but got {xs}"
-    return typing.cast(list[tuple[float, float]], x)
+    return typing.cast(list[tuple[float, float]], xs)
 
 def _parse_equals_pair_list3(string: str) -> list[tuple[float, float, float]]:
     """Same as _parse_equals_pair_list but ensures result is a triplet"""
     xs = _parse_equals_pair_list(string)
     for x in xs:
         assert len(x) == 3, f"expected this field to be a triplet, but got {xs}"
-    return typing.cast(list[tuple[float, float, float]], x)
-
+    return typing.cast(list[tuple[float, float, float]], xs)
 
 
 def is_applicable_chart(chart: Chart, stepfile_name=None) -> bool:
@@ -244,11 +243,7 @@ def is_applicable_chart(chart: Chart, stepfile_name=None) -> bool:
     # TODO: Implement gimmick filtering
     delay_ok = len(chart.DELAYS) == 0
     warp_ok = len(chart.WARPS) == 0
-    time_sig_ok = len(chart.TIMESIGNATURES) == 1 and chart.TIMESIGNATURES[0] == (
-        0,
-        4,
-        4,
-    )
+    time_sig_ok = len(chart.TIMESIGNATURES) == 1 and chart.TIMESIGNATURES[0] == ( 0, 4, 4, )
     stop_ok = len(chart.STOPS) == 0
     fake_ok = len(chart.FAKES) == 0
 
@@ -359,6 +354,7 @@ def _compute_segment_durations(bpms: list[tuple[float, float]]) -> list[float]:
     10 seconds, 5 seconds
     """
     assert len(bpms) > 0
+    assert all(isinstance(x, float) and isinstance(y, float) for x, y in bpms)
 
     return [
         _bpm_to_spb(bpm) * (nexttime - time)
