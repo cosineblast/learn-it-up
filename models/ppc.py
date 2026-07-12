@@ -96,7 +96,9 @@ class PumpItUpConvolutionCNNOnset(nn.Module):
 
 
 class PumpItUpConvolutionLSTMOnset(nn.Module):
-    def __init__(self, channel_is_last=False):
+    def __init__(self, channel_is_last=False, output_size=1):
+        self.output_size = output_size
+        
         super().__init__()
 
         self.channel_is_last = channel_is_last
@@ -104,7 +106,7 @@ class PumpItUpConvolutionLSTMOnset(nn.Module):
         # Input: 
         # - X: (Batch x UnrollLength x 3 x 15 x 80) 
         # - Difficuly: (Batch x 25)
-        # Output: (Batch x UnrollLength) 
+        # Output: (Batch x UnrollLength x OutputSize) 
         # See PumpItUpConvolutionCNNOnset for more info on these numbers
 
         self.convolution = nn.Sequential(
@@ -149,7 +151,7 @@ class PumpItUpConvolutionLSTMOnset(nn.Module):
             nn.Linear(in_features=256, out_features=128),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(in_features=128, out_features=1)
+            nn.Linear(in_features=128, out_features=output_size)
         )
 
     def forward(self, x, difficulty):
@@ -198,10 +200,15 @@ class PumpItUpConvolutionLSTMOnset(nn.Module):
         _after_lstm = torch.flatten(after_lstm, start_dim=0, end_dim=1)
         # (Batch * UnrollLength) x RNNSize
         _linear_result = self.mlp(_after_lstm)
-        # (Batch * UnrollLength) x 1
-        linear_result = torch.reshape(_linear_result, (batch, unroll_length))
 
-        # Batch x UnrollLength
+        # Batch * UnrollLength x Output
+        if self.output_size == 1:
+            linear_result = torch.reshape(_linear_result, (batch, unroll_length))
+            # -> Batch x UnrollLength 
+        else:
+            linear_result = torch.reshape(_linear_result, (batch, unroll_length, self.output_size))
+            # -> Batch x UnrollLength x OutputSize
+
         return linear_result
 
 

@@ -64,6 +64,14 @@ class PPC_CNNOnsetDataset(torch.utils.data.Dataset):
 ChartBlockStats = namedtuple('ChartBlockStats', ['len_blocks', 'first_frame_index', 'last_frame_index', 'stepfile_index'])
 
 class PPC_LSTMOnsetDataset(PerChartDataset):
+
+    @staticmethod
+    def DropYReleaseTransform():
+        def run(stuff):
+            x, delta, y, y_relase = stuff
+            return x, delta, y
+        return run
+
     """
     The dataset for the C-LSTM onset model. 
 
@@ -74,11 +82,12 @@ class PPC_LSTMOnsetDataset(PerChartDataset):
     - X: (N x 15 x 80 x 3) np tensor containing the input frames, where 1 <= N <= UnrollLength
     - Difficulty: (25,) np tensor containing the one-hot difficulty for the returned frames
     - y: (N,) bool np tensor determining whether the frames are step or not
+    - y_release: (N,) bool np tensor determining whether the frames are release steps or not
     """
-    def __init__(self, stepfiles: list[RefinedStepFile], features: list[FeatureView], unroll_length: int, transform=(lambda x:x)):
+    def __init__(self, stepfiles: list[RefinedStepFile], features: list[FeatureView], unroll_length: int, transform=(lambda x: x), include_y_release=False):
         super().__init__(
             chartlen=lambda chart: lstm_onset_chart_len(chart, unroll_length),
-            getitem=lambda chart, features, index: transform(lstm_onset_getitem(chart, features, index, unroll_length)),
+            getitem=lambda chart, features, index: transform(lstm_onset_getitem(chart, features, index, unroll_length, include_y_release)),
             stepfiles=stepfiles,
             features=features
         )
@@ -94,7 +103,9 @@ def lstm_onset_chart_len(chart: RefinedChart, unroll_length: int = 1) -> int:
 
     return frame_count // unroll_length + (frame_count % unroll_length != 0)
 
-def lstm_onset_getitem(chart, music_frames, index, unroll_length):
+def lstm_onset_getitem(chart, music_frames, index, unroll_length, include_y_release=False):
+    transform = (lambda x: x) if include_y_release else PPC_LSTMOnsetDataset.DropYReleaseTransform()
+        
     assert index < lstm_onset_chart_len(chart, unroll_length)
 
     block_first_frame = index * unroll_length + chart_first_frame(chart)
@@ -125,8 +136,18 @@ def lstm_onset_getitem(chart, music_frames, index, unroll_length):
 
     is_step = np.zeros(block_length, dtype=bool)
     is_step[step_indices[step_indices_ok]] = True
+
+    release_indices = np.array([int(step.time_in_seconds * FRAMES_PER_SECOND) - block_first_frame
+                            for step in chart.steps[first_next_step:last_next_step+1]
+                            if '3' in step.stepcode],
+                            dtype=int)
+
+    release_indices_ok = (0 <= release_indices) & (release_indices < block_length)
+
+    is_release = np.zeros(block_length, dtype=bool)
+    is_release[release_indices[release_indices_ok]] = True
     
-    return (frames, difficulty, is_step)
+    return transform((frames, difficulty, is_step, is_release))
 
 def _lstm_onset_frame_context(view: FeatureView, first_frame: int, last_frame: int) -> np.ndarray:
     array, start, length = view

@@ -34,15 +34,20 @@ def stepfile_of(charts, title='some file'):
         charts=charts
     )
 
-def step_at(time):
-    return StepInfo(time_in_beats=fractions.Fraction(0), time_in_seconds=time, stepcode='10000')
+def step_at(time, stepcode='10000'):
+    return StepInfo(time_in_beats=fractions.Fraction(0), time_in_seconds=time, stepcode=stepcode)
 
 def sample_input():
 
     stepfiles = [
         stepfile_of([
             # from frame 0 to frame 100
-            chart_of([step_at(1.0), step_at(1.5), step_at(1.75), step_at(1.832), step_at(1.948), step_at(2.0)], diff=2),
+            chart_of([step_at(1.0, '10000'),
+                     step_at(1.5, '01000'),
+                     step_at(1.75,'00200'),
+                     step_at(1.832, '00300'),
+                     step_at(1.948, '00020'),
+                     step_at(2.0, '00003')], diff=2),
 
             # from frame 101 to frame 301
             chart_of([step_at(1.5), step_at(2.5), step_at(2.75), step_at(3.5)], diff=8),
@@ -127,6 +132,29 @@ class TestLSTMOnsetInputLoader(unittest.TestCase):
             f = self.context_around(i+100)
             np.testing.assert_array_equal(frames, f)
 
+    def test_y_release_works(self):
+        subject = lambda i: loading.ppc.lstm_onset_getitem(self.charts[0], self.audios[0], i, 1, include_y_release=True)
+
+        press_steps = {0, 50, 75, 94}
+        release_steps = {83, 100}
+
+        for i in irange(0, 100):
+            _, _, y_press, y_release = subject(i)
+            self.assertEqual(y_press.shape, (1,))
+            self.assertEqual(y_release.shape, (1,))
+            y_press = y_press[0]
+            y_release = y_release[0]
+
+            if i in press_steps:
+                self.assertEqual(y_press, 1.0, i)
+                self.assertEqual(y_release, 0.0, i)
+            elif i in release_steps:
+                self.assertEqual(y_press, 1.0, i)
+                self.assertEqual(y_release, 1.0, i)
+            else:
+                self.assertEqual(y_press, 0.0, i)
+                self.assertEqual(y_release, 0.0, i)
+
     def context_around(self, i):
         result = np.zeros((15, 3))
 
@@ -192,6 +220,7 @@ class TestLSTMOnsetInputLoader(unittest.TestCase):
             frames, _, _, = self.subject(i, chart=2)
             f = self.context_around(i+1)
             np.testing.assert_array_equal(frames, f)
+
 
 class TestPerChartDataset(unittest.TestCase):
     def setUp(self):

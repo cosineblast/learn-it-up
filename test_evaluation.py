@@ -204,6 +204,22 @@ class TestEvaluationWorks(unittest.TestCase):
             self.assertGreater(metrics.raw_auc_score, 0.0)
             self.assertGreater(metrics.accuracy, 0.0)
 
+    def test_compatible_with_model_multi_output(self):
+        model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True, output_size=2)
+
+        for chart in self.charts:
+            metrics = evaluation.measure_onset_performance(model, chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu',
+                                                            process_output = lambda y: torch.amax(y, dim=2))
+
+            self.assertGreater(metrics.precision, 0.0)
+            self.assertGreater(metrics.recall, 0.0)
+            self.assertGreater(metrics.fscore, 0.0)
+            self.assertGreater(metrics.aligned_auc_score, 0.0)
+            self.assertGreater(metrics.raw_auc_score, 0.0)
+            self.assertGreater(metrics.accuracy, 0.0)
+
+
+
 
 class TestAlignedEvaluation(unittest.TestCase):
 

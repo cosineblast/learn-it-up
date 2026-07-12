@@ -33,7 +33,9 @@ class OnsetEvaluation(typing.NamedTuple):
     aligned_auc_score: float
     accuracy: float
 
-def measure_onset_performance(model, chart: ssc_util.RefinedChart, features: loading.FeatureView, loss_fn, device: str):
+def measure_onset_performance(model, chart: ssc_util.RefinedChart, features: loading.FeatureView, loss_fn, device: str, process_output=None):
+    if process_output is None:
+        process_output = lambda x: x
 
     length = loading.ppc.lstm_onset_chart_len(chart)
     x, difficulty, y = loading.ppc.lstm_onset_getitem(chart, features, 0, length)
@@ -43,7 +45,7 @@ def measure_onset_performance(model, chart: ssc_util.RefinedChart, features: loa
         y_torch = torch.tensor(y)[None, :].float().to(device)
         difficulty = torch.tensor(difficulty)[None, :].float().to(device)
 
-        log_scores = model(x, difficulty)
+        log_scores = process_output(model(x, difficulty))
 
         scores = F.sigmoid(log_scores).detach().cpu().numpy()
         mean_loss = torch.mean(loss_fn(log_scores, y_torch)).detach().cpu().numpy()
