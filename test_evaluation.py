@@ -3,6 +3,7 @@ import unittest
 import loading
 import numpy as np
 import torch
+import models.ppc
 
 import evaluation
 from ssc_util import RefinedStepFile, RefinedChart, StepInfo
@@ -190,6 +191,18 @@ class TestEvaluationWorks(unittest.TestCase):
             result = evaluation.measure_onset_performance(self.very_misaligned_model, self.charts[i], self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
             self.assertLess(result.precision, 0.1, f'Precision for chart {i} must be near 0')
 
+    def test_compatible_with_model(self):
+        model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True, output_size=1)
+
+        for chart in self.charts:
+            metrics = evaluation.measure_onset_performance(model, chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')
+
+            self.assertGreater(metrics.precision, 0.0)
+            self.assertGreater(metrics.recall, 0.0)
+            self.assertGreater(metrics.fscore, 0.0)
+            self.assertGreater(metrics.aligned_auc_score, 0.0)
+            self.assertGreater(metrics.raw_auc_score, 0.0)
+            self.assertGreater(metrics.accuracy, 0.0)
 
 
 class TestAlignedEvaluation(unittest.TestCase):
@@ -282,9 +295,6 @@ class TestAlignedEvaluation(unittest.TestCase):
         self.assertGreater(metrics.accuracy, 0.99)
 
     def test_real_model_does_not_crash(self):
-
-        import models.ppc
-        
         model = models.ppc.PumpPumpConvolutionAlignedOnset()
 
         metrics = evaluation.measure_aligned_onset_performance(model, self.chart, self.audio_view, self.loss_fn)
