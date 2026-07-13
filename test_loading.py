@@ -327,6 +327,10 @@ class TestStepSelectionDataset(unittest.TestCase):
 
         self.assertEqual(len(dataset), len(self.chart.steps))
 
+        dataset2 = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 2)
+
+        self.assertEqual(len(dataset2), len(self.chart.steps) // 2)
+
     def test_first_input_ok(self):
         stepfiles = [stepfile_of([self.chart])]
         dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)

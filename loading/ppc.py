@@ -309,13 +309,16 @@ class PPC_SelectionLSTMDataset(PerChartDataset):
         # "first sequence incredibly unlikely to appear, balance this"
 
         super().__init__(
-            chartlen=lambda chart: len(chart.steps),
             getitem=lambda chart, features, index: transform(lstm_selection_getitem(chart, index,unroll_length)),
+            chartlen=lambda chart: lstm_selection_chart_len(chart, unroll_length),
             stepfiles=stepfiles,
             features=[() for _ in stepfiles]
         )
 
 def lstm_selection_getitem(chart, index, unroll_length):
+def lstm_selection_chart_len(chart, unroll_length):
+    return (len(chart.steps) // unroll_length) + bool(len(chart.steps) % unroll_length)
+
     block_index = index
 
     start_index = block_index * unroll_length
