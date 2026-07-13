@@ -321,7 +321,15 @@ class PPC_SelectionLSTMDataset(PerChartDataset):
     - y: (N,) integer np tensor containing the one-hot index of the next steps of the sequence
     """
 
-    def __init__(self, stepfiles: list[RefinedStepFile], unroll_length: int, transform=(lambda x:x)):
+    @staticmethod
+    def DropDeltaReleaseTransform():
+        def run(stuff):
+            x, delta, y = stuff
+            return x, delta[:, 0:3], y
+
+        return run
+
+    def __init__(self, stepfiles: list[RefinedStepFile], unroll_length: int, transform=(lambda x:x), include_delta_release=False):
         # this class divides all the input chart steps into blocks of size UnrollLength and allows
         # access to them by index.
         # charts may have a number of steps that is not divisble by the unroll length, so the returned blocks
@@ -330,16 +338,16 @@ class PPC_SelectionLSTMDataset(PerChartDataset):
         # "first sequence incredibly unlikely to appear, balance this"
 
         super().__init__(
-            getitem=lambda chart, features, index: transform(lstm_selection_getitem(chart, index,unroll_length)),
             chartlen=lambda chart: lstm_selection_chart_len(chart, unroll_length),
+            getitem=lambda chart, features, index: transform(lstm_selection_getitem(chart, index,unroll_length, include_delta_release=include_delta_release)),
             stepfiles=stepfiles,
             features=[() for _ in stepfiles]
         )
 
-def lstm_selection_getitem(chart, index, unroll_length):
 def lstm_selection_chart_len(chart, unroll_length):
     return (len(chart.steps) // unroll_length) + bool(len(chart.steps) % unroll_length)
 
+def lstm_selection_getitem(chart, index, unroll_length, include_delta_release=False):
     block_index = index
 
     start_index = block_index * unroll_length
@@ -349,7 +357,7 @@ def lstm_selection_chart_len(chart, unroll_length):
     # block length may be shorter than unroll_length
     end_index = start_index + len(block)
 
-    return steps_to_model_input(chart.steps, start_index, end_index)
+    return steps_to_model_input(chart.steps, start_index, end_index, include_delta_release)
 
 def _binary_search_index(sums, target_index: int) -> tuple[int, int]:
     """
@@ -381,7 +389,9 @@ def _binary_search_index(sums, target_index: int) -> tuple[int, int]:
 
     
 
-def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int, include_delta_release=False) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    transform = (lambda x: x) if include_delta_release else PPC_SelectionLSTMDataset.DropDeltaReleaseTransform()
+
     """
     Given a list of StepInfo values, this function  returns
     the selection model bag-of-arrows np tensor input for the steps in the given range.
@@ -390,6 +400,9 @@ def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int
     a slice list of the steps, because the returned model input contains information about next and previous steps,
     so it needs to know whether it is dealing with the start of the chart or not.
     """
+
+    assert start_index < end_index
+    
     assert len(steps) >= 2
     x = np.stack([
         np.zeros((5, 4)) if i == 0 else
@@ -401,7 +414,8 @@ def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int
         time_before = 0.0 if i == 0 else steps[i].time_in_seconds - steps[i-1].time_in_seconds
         time_after = 0.0 if i == len(steps)-1 else steps[i+1].time_in_seconds - steps[i].time_in_seconds
         is_first = float(i == 0)
-        return np.array([time_before, time_after, is_first])
+        is_release = float('3' in steps[i].stepcode)
+        return np.array([time_before, time_after, is_first, is_release])
 
     delta = np.stack([deltaof(i) for i in range(start_index, end_index)])
 
@@ -410,7 +424,7 @@ def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int
         for i in range(start_index, end_index)
     ])
 
-    return x, delta, y
+    return transform((x, delta, y))
 
 _bag_of_arrows_cache = {}
 def stepcode_to_bag_tensor(stepcode: str) -> np.ndarray:

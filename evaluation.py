@@ -141,9 +141,9 @@ def frame_of(step):
 
 StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy'])
 
-def measure_selection_performance(model, chart, loss_fn, device):
+def measure_selection_performance(model, chart, loss_fn, device, include_delta_release=False):
 
-    x, delta, y = loading.ppc.steps_to_model_input(chart.steps, 0, len(chart.steps))
+    x, delta, y = loading.ppc.steps_to_model_input(chart.steps, 0, len(chart.steps), include_delta_release)
 
     real_y = y
 

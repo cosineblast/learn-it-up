@@ -216,6 +216,8 @@ from dataclasses import dataclass
 
 class PumpItUpConvolutionSelectionLSTM(nn.Module):
 
+    # why do we have this class instead of just parameters again?
+    # TODO: fix this
     @dataclass
     class Settings:
         rnn_size: int = 128
@@ -226,11 +228,15 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
         super().__init__()
 
         # Input: 
-        # - X: (Batch x UnrollLength x 5 x 4) tensor with the bag-of-arrows representation of the steps
-        # - DeltaTime: (Batch x UnrollLength x 3) value representing the amout of time in seconds since the last and next step, and whether it is the first step or not
+        #   X: (Batch x UnrollLength x 5 x 4) tensor with the bag-of-arrows representation of the steps
+        #   DeltaTime: (Batch x UnrollLength x 3) value containing additional information, such as:
+        #   - the amout of time in seconds since the last and next step,
+        #   - the amout of time before the next step
+        #   - whether this step is a release step
+        #   - whether the the target step is a release
         # Where:
-        # - 5 is the number of steps of the game (down left, up left, center, up right, down right)
-        # - 4 is the one-hot for the arrow (disabled, step, start hold, end hold)
+        #   5 is the number of steps of the game (down left, up left, center, up right, down right)
+        #   4 is the one-hot for the arrow (disabled, step, start hold, end hold)
         # Output: (Batch x UnrollLength x 4^5) tensor containing the pre-softmax scores for the next step to be placed
 
         self.rnn_projection = nn.Linear(
@@ -261,7 +267,7 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
 
         assert delta.shape[0] == batch
         assert delta.shape[1] == unroll
-        assert delta.shape[2] == 3
+        assert delta.shape[2] == 3 or delta.shape[2] == 4
 
         # Batch x Unroll x 5 x 4
         flattened_x = torch.flatten(x, start_dim=2)

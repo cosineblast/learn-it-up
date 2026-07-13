@@ -59,9 +59,16 @@ def _():
 
 
 @app.cell
-def _(UNROLL, loading, training_stepfiles):
+def _():
+    include_delta_release = False
+    return (include_delta_release,)
+
+
+@app.cell
+def _(UNROLL, include_delta_release, loading, training_stepfiles):
     training_dataset = loading.ppc.PPC_SelectionLSTMDataset(training_stepfiles, unroll_length=UNROLL,
-                                                                       transform=loading.MaskAndPaddingTransform(UNROLL))
+                                                                       transform=loading.MaskAndPaddingTransform(UNROLL),
+                                                           include_delta_release=include_delta_release)
     len(training_dataset)
     return (training_dataset,)
 
@@ -73,9 +80,9 @@ def _(BATCH_SIZE, DataLoader, training_dataset):
 
 
 @app.cell
-def _(device, models):
+def _(device, include_delta_release, models):
     Model = models.ppc.PumpItUpConvolutionSelectionLSTM 
-    selection_model = Model().float().to(device)
+    selection_model = Model(Model.Settings(delta_features=3 + include_delta_release)).float().to(device)
     selection_model
     return (selection_model,)
 
@@ -214,6 +221,7 @@ def _(epoch_count, should_train, train_epochs):
 def _(
     device,
     evaluation,
+    include_delta_release,
     loss_fn,
     mo,
     namedtuple,
@@ -234,7 +242,7 @@ def _(
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
             for stepfile in stepfiles:
                 for chart in stepfile.charts:
-                    result = evaluation.measure_selection_performance(selection_model, chart, loss_fn, device)
+                    result = evaluation.measure_selection_performance(selection_model, chart, loss_fn, device, include_delta_release)
 
                     sum_mean_loss += result.mean_loss
                     sum_accuracy += result.accuracy
@@ -268,7 +276,7 @@ def _(
     torch,
 ):
     if should_evaluate.value:
-        evaluate_validation_per_chart()
+        print(evaluate_validation_per_chart())
 
     if should_save.value:
         _path = 'selection_model.pth' 
