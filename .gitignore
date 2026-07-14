@@ -11,3 +11,5 @@ samples
 .venv
 .hypothesis
 *.pth
+*.tar.gz
+*.zip

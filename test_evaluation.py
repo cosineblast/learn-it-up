@@ -192,7 +192,7 @@ class TestEvaluationWorks(unittest.TestCase):
             self.assertLess(result.precision, 0.1, f'Precision for chart {i} must be near 0')
 
     def test_compatible_with_model(self):
-        model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True, output_size=1)
+        model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True)
 
         for chart in self.charts:
             metrics = evaluation.measure_onset_performance(model, chart, self.audio_view, torch.nn.BCEWithLogitsLoss(), 'cpu')

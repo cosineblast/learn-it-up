@@ -315,10 +315,10 @@ class PPC_SelectionLSTMDataset(PerChartDataset):
             features=[() for _ in stepfiles]
         )
 
-def lstm_selection_getitem(chart, index, unroll_length):
 def lstm_selection_chart_len(chart, unroll_length):
     return (len(chart.steps) // unroll_length) + bool(len(chart.steps) % unroll_length)
 
+def lstm_selection_getitem(chart, index, unroll_length):
     block_index = index
 
     start_index = block_index * unroll_length
