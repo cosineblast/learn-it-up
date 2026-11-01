@@ -64,6 +64,51 @@ def _(np, stepfiles):
     return (chartcounts,)
 
 
+@app.cell
+def _(stepfiles):
+    print('Number of song artists:', len(set(stepfile.info['ARTIST'] for stepfile in stepfiles)))
+    print('Number of step authors:', len(set(chart.credit for stepfile in stepfiles for chart in stepfile.charts)))
+    print('Song count:', len(stepfiles))
+    print('Chart count:', sum(len(stepfile.charts) for stepfile in stepfiles))
+
+    # obtained with the nushell command: rg GENRE | lines | parse "{file}:{genre}" | get genre | histogram
+    print('Genres: ORIGINAL, WORLD MUSIC, K-POP, XROSS')
+    # technically this doesn't exclude filtered charts but 谁问？
+
+
+    def _classify_step(stepcode):
+        if '2' not in stepcode and '1' not in stepcode:
+            assert '3' in stepcode
+            return 'RELEASE'
+        
+        stepcode = stepcode.replace('3', '0')
+    
+        if '1' not in stepcode:
+            return 'HOLD'
+        
+        if stepcode in {'10000', '01000', '00100', '00010', '00001'}:
+            return 'STEP'
+    
+        return 'JUMP'
+        
+    _all_step_kinds = [_classify_step(step.stepcode) for stepfile in stepfiles for chart in stepfile.charts for step in chart.steps]
+    _step_kinds = [kind for kind in _all_step_kinds if kind != 'RELEASE']
+
+    _total = len(_step_kinds)
+    _normal_total = sum(1 for kind in _step_kinds if kind == 'STEP')
+    _release_total = sum(1 for kind in _step_kinds if kind == 'RELEASE')
+    _jump_total = sum(1 for kind in _step_kinds if kind == 'JUMP')
+    _hold_total = sum(1 for kind in _step_kinds if kind == 'HOLD')
+
+    print('Total step count:', _total)
+
+    print('Normal step :', _normal_total / _total * 100, '%') 
+    print('Jump Stepcount:', _jump_total / _total * 100, '%') 
+    print('Hold Stepcount:',  _hold_total / _total * 100, '%') 
+
+    return
+
+
 @app.cell(hide_code=True)
 def _(chartcounts, mo, np):
     mo.md(f"""
@@ -283,12 +328,12 @@ def _():
 @app.function
 def make_gray_and_black(*, bars=None, hist=None):
     assert bars is not None or hist is not None
-    
+
     if hist is not None:
         columns = hist[2]
     else:
         columns = bars
-    
+
     color1 = 'gray'
     color2 = 'lightgray'
     color = color2

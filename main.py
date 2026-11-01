@@ -117,6 +117,8 @@ def parse_all():
 
     os.makedirs("data/parsed", exist_ok=True)
 
+    filtered_count = 0
+
     for file in ok_sscs:
         print("<<< Parsing SSC file", file)
 
@@ -125,6 +127,8 @@ def parse_all():
         charts = [
             chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)
         ]
+
+        filtered_count += len(stepfile.charts) - len(charts)
 
         if len(charts) == 0:
             print('>>> Skipping file {} since all of its charts were filtered out'.format(file))
@@ -145,6 +149,8 @@ def parse_all():
 
         with open(destination_path, "wb") as f:
             ssc_util.dump_refined_stepfile(refined_stepfile, f)
+
+    print(f'Filtered {filtered_count} charts')
 
 def _file_name_ok(path: str):
     name = Path(path).name.upper()
