@@ -117,6 +117,7 @@ def parse_all():
 
     os.makedirs("data/parsed", exist_ok=True)
 
+    skip_status = []
     filtered_count = 0
 
     for file in ok_sscs:
@@ -128,6 +129,7 @@ def parse_all():
             chart for chart in stepfile.charts if ssc_util.is_applicable_chart(chart)
         ]
 
+        skip_status += [ssc_util.verify_chart_skip_status(chart) for chart in stepfile.charts]
         filtered_count += len(stepfile.charts) - len(charts)
 
         if len(charts) == 0:
@@ -150,7 +152,28 @@ def parse_all():
         with open(destination_path, "wb") as f:
             ssc_util.dump_refined_stepfile(refined_stepfile, f)
 
+    show_skipped_chart_stats(skip_status)
+
+
+def show_skipped_chart_stats(skip_status):
     print(f'Filtered {filtered_count} charts')
+    print(f'Filter reasons:')
+
+    s = skip_status
+
+    def show_reason_count(name, is_bad):
+        nonlocal s
+        k = sum(is_bad(status) for status in s)
+        print(name, k)
+        s = [status for status in s if not is_bad(status)]
+
+    show_reason_count('name_ok:', lambda x: not x.name_ok)
+    show_reason_count('time_signature_ok:', lambda x: not x.time_signature_ok)
+    show_reason_count('notes_ok:', lambda x: not x.notes_ok)
+    show_reason_count('delay_ok:', lambda x: not x.delay_ok)
+    show_reason_count('warp_ok:', lambda x: not x.warp_ok)
+    show_reason_count('stop_gimmick_ok:', lambda x: not x.stop_gimmick_ok)
+    show_reason_count('fake_gimmick_ok:', lambda x: not x.fake_gimmick_ok)
 
 def _file_name_ok(path: str):
     name = Path(path).name.upper()

@@ -227,12 +227,29 @@ def _parse_equals_pair_list3(string: str) -> list[tuple[float, float, float]]:
     return typing.cast(list[tuple[float, float, float]], xs)
 
 
+class SkipStatus(NamedTuple):
+    notes_ok: bool
+    name_ok: bool
+    delay_ok: bool
+    warp_ok: bool
+    stop_gimmick_ok: bool
+    fake_gimmick_ok: bool
+    time_signature_ok: bool
+    
+# TODO: pass warning log effect
 def is_applicable_chart(chart: Chart, stepfile_name=None) -> bool:
     """Determines if a chart should be skipped or kept."""
+    notes_ok, name_ok, delay_ok, warp_ok, stop_ok, fake_ok, time_sig_ok = verify_chart_skip_status(chart, stepfile_name)
+
+    # TODO: include stop and fake. we forgot to include it before, must include and test if shit still works.
+    return notes_ok and name_ok and delay_ok and warp_ok and time_sig_ok
+
+def verify_chart_skip_status(chart: Chart, stepfile_name=None) -> SkipStatus:
+    """Determines if a chart should be skipped or kept, and if it should be skipped,
+    informs the reason for why."""
 
     name_ok = (
         "UCS" not in chart.DESCRIPTION
-        and not chart.DESCRIPTION.startswith("D")
         and "D" not in chart.DESCRIPTION
         and "QUEST" not in chart.DESCRIPTION
         and "PRO" not in chart.DESCRIPTION
@@ -267,7 +284,9 @@ def is_applicable_chart(chart: Chart, stepfile_name=None) -> bool:
 
         return True
 
-    return check_notes_ok() and name_ok and delay_ok and warp_ok and time_sig_ok
+    notes_ok = check_notes_ok()
+
+    return SkipStatus(notes_ok, name_ok, delay_ok, warp_ok, stop_ok, fake_ok, time_sig_ok)
 
 
 def refine_stepfile(stepfile: StepFile, original_path: str) -> RefinedStepFile:
