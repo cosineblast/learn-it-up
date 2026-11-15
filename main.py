@@ -152,10 +152,10 @@ def parse_all():
         with open(destination_path, "wb") as f:
             ssc_util.dump_refined_stepfile(refined_stepfile, f)
 
-    show_skipped_chart_stats(skip_status)
+    show_skipped_chart_stats(skip_status, filtered_count)
 
 
-def show_skipped_chart_stats(skip_status):
+def show_skipped_chart_stats(skip_status, filtered_count):
     print(f'Filtered {filtered_count} charts')
     print(f'Filter reasons:')
 
