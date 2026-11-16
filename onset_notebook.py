@@ -340,19 +340,19 @@ def _(device, models):
 def _(device, np, torch):
     cnn_sample_data = torch.tensor(np.random.randn(10, 3, 15, 80)).type(torch.float32).to(device)
     cnn_sample_data.shape
-    return
+    return (cnn_sample_data,)
 
 
 @app.cell
 def _(F, device, torch):
     cnn_difficulty_data = F.one_hot(torch.tensor([15]).repeat(10), num_classes=25).type(torch.float32).to(device)
     cnn_difficulty_data.shape
-    return
+    return (cnn_difficulty_data,)
 
 
 @app.cell
-def _(full_difficulty_data, full_model_data, sample_cnn_model):
-    sample_cnn_model(full_model_data, full_difficulty_data)
+def _(cnn_difficulty_data, cnn_sample_data, sample_cnn_model):
+    sample_cnn_model(cnn_sample_data, cnn_difficulty_data)
     return
 
 
