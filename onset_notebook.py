@@ -89,9 +89,30 @@ def _(DataLoader, training_dataset):
     return BATCH_SIZE, training_loader
 
 
-@app.cell
-def _(device, models):
-    model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True).float().to(device)
+@app.cell(hide_code=True)
+def _(mo):
+    selected_model_radio = mo.ui.radio(
+        options={"Logistic Regression": "logistic", "CNN": "cnn", "CNN-LSTM": "lstm"},
+        value='Logistic Regression',
+        label="Model architecture selection",
+    )
+
+    mo.center(
+        selected_model_radio
+    )
+    return (selected_model_radio,)
+
+
+@app.cell(hide_code=True)
+def _(device, models, selected_model_radio):
+    _class = None
+
+    match selected_model_radio.value: 
+        case 'logistic': _class = models.ppc.PumpPumpConvolutionLogisticOnset
+        case 'cnn': _class = models.ppc.PumpItUpConvolutionCNNOnset
+        case 'lstm': _class = models.ppc.PumpItUpConvolutionLSTMOnset
+
+    model = _class(channel_is_last=True).float().to(device)
     model
     return (model,)
 
@@ -331,23 +352,40 @@ def _(mo):
 
 
 @app.cell
-def _(device, models):
-    sample_cnn_model = models.ppc.PumpItUpConvolutionCNNOnset().float().to(device)
-    return (sample_cnn_model,)
+def _(F, device, models, np, torch):
+    # Testing logistic
+
+    sample_logistic_model = models.ppc.PumpPumpConvolutionLogisticOnset(channel_is_last=False).float().to(device)
+
+    logistic_sample_data = torch.tensor(np.random.randn(1, 100, 3, 15, 80)).type(torch.float32)
+    logistic_difficulty_data =F.one_hot(torch.tensor([15]), num_classes=25).type(torch.float32) 
+
+    print(logistic_sample_data.shape, logistic_difficulty_data.shape)
+    return (
+        logistic_difficulty_data,
+        logistic_sample_data,
+        sample_logistic_model,
+    )
 
 
 @app.cell
-def _(device, np, torch):
+def _(logistic_difficulty_data, logistic_sample_data, sample_logistic_model):
+    sample_logistic_model(logistic_sample_data, logistic_difficulty_data)
+    return
+
+
+@app.cell
+def _(F, device, models, np, torch):
+    # Testing CNN
+
+    sample_cnn_model = models.ppc.PumpItUpConvolutionCNNOnset(channel_is_last=False).float().to(device)
+
     cnn_sample_data = torch.tensor(np.random.randn(10, 3, 15, 80)).type(torch.float32).to(device)
-    cnn_sample_data.shape
-    return (cnn_sample_data,)
-
-
-@app.cell
-def _(F, device, torch):
     cnn_difficulty_data = F.one_hot(torch.tensor([15]).repeat(10), num_classes=25).type(torch.float32).to(device)
-    cnn_difficulty_data.shape
-    return (cnn_difficulty_data,)
+
+
+    print(cnn_sample_data.shape, cnn_difficulty_data.shape)
+    return cnn_difficulty_data, cnn_sample_data, sample_cnn_model
 
 
 @app.cell
@@ -357,23 +395,17 @@ def _(cnn_difficulty_data, cnn_sample_data, sample_cnn_model):
 
 
 @app.cell
-def _(models):
-    sample_lstm_model = models.ppc.PumpItUpConvolutionLSTMOnset()
-    return (sample_lstm_model,)
+def _(F, models, np, torch):
+    # Testing LSTM
 
+    sample_lstm_model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=False)
 
-@app.cell
-def _(np, torch):
     full_model_data = torch.tensor(np.random.randn(1, 100, 3, 15, 80)).type(torch.float32)
-    full_model_data.shape
-    return (full_model_data,)
 
-
-@app.cell
-def _(F, torch):
     full_difficulty_data = F.one_hot(torch.tensor([15]), num_classes=25).type(torch.float32)
-    full_difficulty_data.shape
-    return (full_difficulty_data,)
+
+    print(full_model_data.shape, full_difficulty_data.shape)
+    return full_difficulty_data, full_model_data, sample_lstm_model
 
 
 @app.cell

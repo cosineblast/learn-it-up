@@ -3,6 +3,54 @@ import torch.nn as nn
 import numpy as np
 import torch
 
+class PumpPumpConvolutionLogisticOnset(nn.Module):
+    def __init__(self, dropout=0.5, channel_is_last=False):
+        super().__init__()
+
+        # Input: 
+        # - X: (Batch x UnrollLength x 3 x 15 x 80) 
+        # - Difficuly: (Batch x 25)
+        # Output: (Batch x UnrollLength) 
+        # See PumpItUpConvolutionCNNOnset for more info on these numbers
+
+        self.channel_is_last = channel_is_last
+
+        max_difficulty = 25
+
+        self.logistic = nn.Linear(in_features=3 * 15 * 80 + max_difficulty, out_features=1)
+
+    def forward(self, x, difficulty):
+        # (Batch x Unroll x 3 x 15 x 80), (Batch x 25)
+        assert len(x.shape) == 5
+
+        original_batch = x.shape[0]
+        unroll = x.shape[1]
+        x = torch.flatten(x, start_dim=0, end_dim=1)
+        difficulty = difficulty.repeat_interleave(unroll, dim=0)
+
+        if self.channel_is_last:
+            # (Batch, 15, 80, 3) -> (Batch, 3, 15, 80)
+            x = x.transpose(1, 3).transpose(2, 3)
+
+        assert x.shape[1:] == (3, 15, 80)
+        assert difficulty.shape[1:] == (25,)
+
+        # Batch x 3 x 15 x 80
+        flattened = torch.flatten(x, start_dim=1)
+            
+        # Batch x (3 * 15 * 80)
+        with_difficulty = torch.concat([flattened, difficulty], dim=1)
+
+        # Batch x (3 * 15 * 80 + 25)
+        linear_result = self.logistic(with_difficulty)
+
+        # Batch x 1
+        output = torch.flatten(linear_result)
+
+        # Batch
+        return output.reshape((original_batch, unroll))
+
+# TODO: remove legacy option to omit unroll length, force users to use unroll 1 for simplicity of API
 class PumpItUpConvolutionCNNOnset(nn.Module):
     def __init__(self, dropout=0.5, channel_is_last=False):
         super().__init__()

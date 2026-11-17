@@ -1,5 +1,20 @@
-- WRITE STUFF
-- Make website
+TEXT STUFF:
+- Remove website mentions and DDCL from essay
+- Talk about personal opinions on results in essay
+- Train again with right unroll (currently = 10?)
+- Put data in a table in essay
+- Solve minor TODOs
+
+CODE STUFF:
+- Rename PumpItUpConvolution classes to PumpPumpConvolution
+- Implement per-difficulty evaluation in onset_notebook.py
+- Implement logistic regression in onset for comparison
+- Add PIUCenter dataset
+
+if done:
 - Test vertical mirroring for charts below S18
+
+if miracle:
+- Make website
 - Implement CNN-LSTM
 - Implement ConvLSTM
