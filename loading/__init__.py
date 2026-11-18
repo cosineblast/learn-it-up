@@ -85,7 +85,8 @@ def MaskAndPaddingTransform(unroll_length: int, skip: int | None = None):
     possibly different shapes, but all matching the size of their their main axis as `k` (X1.shape[0] = ... = Xn.shape[0] = k).
     If k is less than the unroll length n, then all those vectors are padded with zeroes in their main axis to size n.
     Additionally, an additional element `mask` is added to the returned tuple, containing a vector of shape (n,) with ones
-    in the first k positions, and zero in the last n-k positions.
+    in the first k positions, and zero in the last n-k positions. `skip` is an integer that denotes an index of a position
+    of the tuples not to apply padding to.
     """
     def maskAndPad(stuff: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
         assert isinstance(stuff, tuple)
