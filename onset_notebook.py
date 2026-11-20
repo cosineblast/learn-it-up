@@ -71,7 +71,7 @@ def _(loading, test_paths, training_paths, validation_paths):
 
 @app.cell
 def _(loading, training_features, training_stepfiles):
-    UNROLL_SIZE = 10
+    UNROLL_SIZE = 100
 
     training_dataset = loading.ppc.PPC_LSTMOnsetDataset(
         training_stepfiles, training_features, 
@@ -312,29 +312,49 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
+    evaluate_per_difficulty_checkbox = mo.ui.checkbox(label='Evaluate per difficulty')
     evaluate_button = mo.ui.run_button(label='Evaluate')
     save_button = mo.ui.run_button(label='Save')
 
     mo.center(
         mo.vstack([
+            mo.md('**Evaluation**'),
+            evaluate_per_difficulty_checkbox,
             evaluate_button, 
             save_button
         ])
     )
-    return evaluate_button, save_button
+    return evaluate_button, evaluate_per_difficulty_checkbox, save_button
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     evaluate_button,
+    evaluate_per_difficulty_checkbox,
     evaluate_validation_per_chart,
     mo,
     model,
     save_button,
     torch,
+    validation_features,
+    validation_stepfiles,
 ):
+    def _evaluate_per_difficulty():
+        for difficulty in range(1, 26):
+            _stepfiles = [stepfile._replace(charts = [chart for chart in stepfile.charts if chart.difficulty == difficulty]) 
+                          for stepfile in validation_stepfiles]
+
+            if sum(len(stepfile.charts) for stepfile in _stepfiles) > 0:
+                mo.output.append(evaluate_validation_per_chart(_stepfiles, validation_features)._asdict())
+
+    def _evaluate_all():
+        mo.output.append(evaluate_validation_per_chart(validation_stepfiles, validation_features)._asdict())
+    
     if evaluate_button.value:
-        mo.output.append(evaluate_validation_per_chart()._asdict())
+        if evaluate_per_difficulty_checkbox.value:
+            _evaluate_per_difficulty()
+        else:
+            _evaluate_all()
 
     if save_button.value:
         _path = 'onset_model.pth'

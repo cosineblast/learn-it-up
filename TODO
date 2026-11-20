@@ -6,9 +6,8 @@ TEXT STUFF:
 - Solve minor TODOs
 
 CODE STUFF:
+- Collect data for logistic regression model
 - Rename PumpItUpConvolution classes to PumpPumpConvolution
-- Implement per-difficulty evaluation in onset_notebook.py
-- Implement logistic regression in onset for comparison
 - Add PIUCenter dataset
 
 if done:
@@ -16,5 +15,6 @@ if done:
 
 if miracle:
 - Make website
+- Try with transformer
 - Implement CNN-LSTM
 - Implement ConvLSTM
