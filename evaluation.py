@@ -137,7 +137,7 @@ def _compute_true_positives(pred_onsets, real_onsets):
 def frame_of(step):
     return floor(step.time_in_seconds * FRAMES_PER_SECOND)
 
-StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy'])
+StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy', 'confusion_matrix'])
 
 def measure_selection_performance(model, chart, loss_fn, device):
 
@@ -165,9 +165,40 @@ def measure_selection_performance(model, chart, loss_fn, device):
 
     # computing main metrics 
 
+    class_table = _get_stepcode_class_table()
+    
+    real_y_classes = class_table[real_y]
+    predicted_y_classes = class_table[predictions]
+
+    matrix = sklearn.metrics.confusion_matrix(real_y_classes, predicted_y_classes, labels=[0, 1, 2, 3, 4])
+
     accuracy = sklearn.metrics.accuracy_score(real_y, predictions)
 
-    return StepEvaluation(mean_loss, accuracy)    
+    return StepEvaluation(mean_loss, accuracy, matrix)    
+
+_stepcode_class_table = None
+def _get_stepcode_class_table():
+    global _stepcode_class_table
+    if _stepcode_class_table is not None:
+        return _stepcode_class_table
+
+    mapping = {'EMPTY': 0, 'STEP': 1, 'HOLD': 2, 'ENDHOLD': 3, 'MIXED': 4}
+    table = np.zeros(4**5, dtype=int)
+
+    for label in range(4**5):
+        table[label] = mapping[_classify_stepcode(loading.ppc.index_to_stepcode(label))]
+
+    _stepcode_class_table = table
+    return table
+
+def _classify_stepcode(stepcode):
+    match '1' in stepcode, '2' in stepcode, '3' in stepcode:
+        case (False, False, False): return 'EMPTY'
+        case (True, False, False): return 'STEP'
+        case (False, True, False): return 'HOLD'
+        case (False, False, True): return 'ENDHOLD'
+        case _: return 'MIXED'
+
 
     
 import loading.ppc

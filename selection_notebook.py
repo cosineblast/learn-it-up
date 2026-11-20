@@ -217,17 +217,19 @@ def _(
     loss_fn,
     mo,
     namedtuple,
+    np,
     selection_model,
     validation_stepfiles,
 ):
     FullStepEvaluation = namedtuple('FullStepEvaluation', 
-                                ['avg_loss', 'avg_accuracy'])
+                                ['avg_loss', 'avg_accuracy', 'avg_scaled_matrix'])
 
     def evaluate_validation_per_chart(stepfiles=validation_stepfiles):
         chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
 
         sum_mean_loss = 0
         sum_accuracy = 0
+        sum_matrix = np.zeros((5, 5))
 
         selection_model.eval()
 
@@ -238,10 +240,11 @@ def _(
 
                     sum_mean_loss += result.mean_loss
                     sum_accuracy += result.accuracy
+                    sum_matrix += result.confusion_matrix / np.sum(result.confusion_matrix) 
 
                     bar.update()
 
-        return FullStepEvaluation(sum_mean_loss / chart_count, sum_accuracy / chart_count)
+        return FullStepEvaluation(sum_mean_loss / chart_count, sum_accuracy / chart_count, sum_matrix / chart_count)
 
     return (evaluate_validation_per_chart,)
 

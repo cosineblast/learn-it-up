@@ -1,20 +1,23 @@
-TEXT STUFF:
-- Remove website mentions and DDCL from essay
+NEXT:
+- Talk about results in essay
 - Talk about personal opinions on results in essay
-- Train again with right unroll (currently = 10?)
-- Put data in a table in essay
+- Include images of generated charts in essay
+- Talk about end-of-hold in essay (link to it in discussion)
+
+TEXT TODO:
+- Remove website mentions and DDCL from essay
 - Solve minor TODOs
 
-CODE STUFF:
-- Collect data for logistic regression model
+CODE TODO:
 - Rename PumpItUpConvolution classes to PumpPumpConvolution
-- Add PIUCenter dataset
 
-if done:
+IF DONE:
+- Test without weight decay
 - Test vertical mirroring for charts below S18
+- Improve gimmick parsing
 
-if miracle:
+IF MIRACLE:
+- Add PIUCenter dataset
 - Make website
 - Try with transformer
-- Implement CNN-LSTM
-- Implement ConvLSTM
+- Implement DanceDanceConvLSTM
