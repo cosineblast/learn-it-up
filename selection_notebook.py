@@ -262,13 +262,14 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(
     evaluate_validation_per_chart,
+    mo,
     selection_model,
     should_evaluate,
     should_save,
     torch,
 ):
     if should_evaluate.value:
-        evaluate_validation_per_chart()
+        mo.output.append(evaluate_validation_per_chart())
 
     if should_save.value:
         _path = 'selection_model.pth' 
