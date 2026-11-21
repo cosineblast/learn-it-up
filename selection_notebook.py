@@ -222,7 +222,7 @@ def _(
     validation_stepfiles,
 ):
     FullStepEvaluation = namedtuple('FullStepEvaluation', 
-                                ['avg_loss', 'avg_accuracy', 'avg_scaled_matrix'])
+                                ['avg_loss', 'avg_accuracy', 'avg_scaled_matrix', 'class_precisions', 'class_recalls', 'class_f1s'])
 
     def evaluate_validation_per_chart(stepfiles=validation_stepfiles):
         chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
@@ -244,12 +244,15 @@ def _(
 
                     bar.update()
 
-        return FullStepEvaluation(sum_mean_loss / chart_count, sum_accuracy / chart_count, sum_matrix / chart_count)
+        return FullStepEvaluation(sum_mean_loss / chart_count, 
+                                  sum_accuracy / chart_count, 
+                                  sum_matrix / chart_count, 
+                                  *evaluation.selection_confusion_matrix_to_class_stats(sum_matrix))
 
     return (evaluate_validation_per_chart,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     save_button = mo.ui.run_button(label='Save model')
     load_button = mo.ui.run_button(label='Load model')

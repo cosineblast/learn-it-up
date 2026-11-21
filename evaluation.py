@@ -176,6 +176,27 @@ def measure_selection_performance(model, chart, loss_fn, device):
 
     return StepEvaluation(mean_loss, accuracy, matrix)    
 
+def selection_confusion_matrix_to_class_stats(matrix):
+    precisions = []
+    recalls = []
+    f1s = []
+    
+    for i in range(matrix.shape[0]):
+        col_sum = np.sum(matrix[:, i])
+        row_sum = np.sum(matrix[i, :])
+            
+        precision = 0 if col_sum == 0 else matrix[i, i] / col_sum
+        recall = 0 if row_sum == 0 else matrix[i, i] / row_sum
+        f1 = 0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
+
+        precisions.append(precision)
+        recalls.append(recall)
+        f1s.append(f1)
+
+    return np.array(precisions), np.array(recalls), np.array(f1s)
+
+    
+
 _stepcode_class_table = None
 def _get_stepcode_class_table():
     global _stepcode_class_table
