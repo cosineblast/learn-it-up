@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.25.2"
 app = marimo.App(width="medium")
 
 
@@ -48,7 +48,7 @@ def _(pickle, test_paths, training_paths, validation_paths):
     training_stepfiles   = _get_stepfiles(training_paths)
     test_stepfiles       = _get_stepfiles(test_paths)
     validation_stepfiles = _get_stepfiles(validation_paths)
-    return training_stepfiles, validation_stepfiles
+    return test_stepfiles, training_stepfiles, validation_stepfiles
 
 
 @app.cell(hide_code=True)
@@ -66,7 +66,7 @@ def _(loading, test_paths, training_paths, validation_paths):
     training_features = [audio_loader(_get_feature_path_for(path)) for path in training_paths]
     validation_features = [audio_loader(_get_feature_path_for(path)) for path in validation_paths]
     test_features = [audio_loader(_get_feature_path_for(path)) for path in test_paths]
-    return training_features, validation_features
+    return test_features, training_features, validation_features
 
 
 @app.cell
@@ -167,8 +167,8 @@ def _(
                 optimizer.step()
                 optimizer.zero_grad()
 
-                if batch % 100 == 0:
-                    bar.update(increment=100, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
+                if batch % 10 == 0:
+                    bar.update(increment=10, subtitle=f'Batch {batch}/{size} Loss: {loss.item()}')
 
 
     return (train_epoch,)
@@ -185,6 +185,8 @@ def _(
     train_epoch,
     training_features,
     training_stepfiles,
+    validation_features,
+    validation_stepfiles,
 ):
     def train_epochs(epochs):
         losses = []
@@ -194,16 +196,16 @@ def _(
         for epoch in range(epochs):
             train_epoch()
 
-            result = evaluate_validation_per_chart()
+            result = evaluate_validation_per_chart(validation_stepfiles, validation_features)
 
             losses.append(result)
 
             print()
             print(f'epoch {epoch+1}/{epochs}. evaluation={result}')
 
-            if result.avg_aligned_auc_score > best_score and should_save_models.value:
+            if result.avg_fscore > best_score and should_save_models.value:
                 torch.save(model.state_dict(), f'best_onset_model.pth')
-                best_score = result.avg_aligned_auc_score
+                best_score = result.avg_fscore
 
             if epoch % 10 == 0 and should_validate_training.value:
                 result = evaluate_validation_per_chart(training_stepfiles, training_features)
@@ -240,7 +242,7 @@ def _(mo):
     )
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(epoch_count_input, train_button, train_epochs):
     if train_button.value:
         metrics = train_epochs(epoch_count_input.value)
@@ -248,23 +250,12 @@ def _(epoch_count_input, train_button, train_epochs):
 
 
 @app.cell
-def _(
-    defaultdict,
-    device,
-    evaluation,
-    loss_fn,
-    mo,
-    model,
-    namedtuple,
-    np,
-    validation_features,
-    validation_stepfiles,
-):
+def _(defaultdict, device, evaluation, loss_fn, mo, model, namedtuple, np):
     FullEvaluation = namedtuple('FullEvaluation', 
                                 ['avg_precision',  'avg_recall', 'avg_fscore', 
                                  'avg_loss', 'avg_raw_auc_score', 'avg_aligned_auc_score', 'avg_accuracy', 'avg_best_thresholds'])
 
-    def evaluate_validation_per_chart(stepfiles=validation_stepfiles, file_features=validation_features):
+    def evaluate_validation_per_chart(stepfiles, file_features):
         chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
 
         sum_precision = 0
@@ -313,53 +304,105 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     evaluate_per_difficulty_checkbox = mo.ui.checkbox(label='Evaluate per difficulty')
+    evaluate_on_test_set_checkbox = mo.ui.checkbox(label='Evaluate on testing set')
     evaluate_button = mo.ui.run_button(label='Evaluate')
-    save_button = mo.ui.run_button(label='Save')
 
     mo.center(
         mo.vstack([
-            mo.md('**Evaluation**'),
-            evaluate_per_difficulty_checkbox,
-            evaluate_button, 
-            save_button
+                mo.md('**Model evaluation**'),
+                evaluate_per_difficulty_checkbox,
+                evaluate_on_test_set_checkbox,
+                evaluate_button, 
         ])
     )
-    return evaluate_button, evaluate_per_difficulty_checkbox, save_button
+    return (
+        evaluate_button,
+        evaluate_on_test_set_checkbox,
+        evaluate_per_difficulty_checkbox,
+    )
 
 
 @app.cell(hide_code=True)
 def _(
     evaluate_button,
+    evaluate_on_test_set_checkbox,
     evaluate_per_difficulty_checkbox,
     evaluate_validation_per_chart,
     mo,
-    model,
-    save_button,
-    torch,
+    test_features,
+    test_stepfiles,
     validation_features,
     validation_stepfiles,
 ):
+    def _get_eval_stepfiles_features():
+        if evaluate_on_test_set_checkbox.value:
+            print('Evaluating on test set')
+            return test_stepfiles, test_features
+        else:
+            print('Evaluating on validation set')
+            return validation_stepfiles, validation_features
+    
     def _evaluate_per_difficulty():
-        for difficulty in range(1, 26):
-            _stepfiles = [stepfile._replace(charts = [chart for chart in stepfile.charts if chart.difficulty == difficulty]) 
-                          for stepfile in validation_stepfiles]
+        stepfiles, features = _get_eval_stepfiles_features()
 
-            if sum(len(stepfile.charts) for stepfile in _stepfiles) > 0:
-                mo.output.append(evaluate_validation_per_chart(_stepfiles, validation_features)._asdict())
+        results = []
+    
+        for difficulty in range(1, 26):
+            filtered_stepfiles = [stepfile._replace(charts = [chart for chart in stepfile.charts if chart.difficulty == difficulty]) 
+                          for stepfile in stepfiles]
+
+            if sum(len(stepfile.charts) for stepfile in filtered_stepfiles) > 0:
+                print('Evaluating level', difficulty)
+                results.append(evaluate_validation_per_chart(filtered_stepfiles, features)._asdict())
+
+        mo.output.append(results)
 
     def _evaluate_all():
-        mo.output.append(evaluate_validation_per_chart(validation_stepfiles, validation_features)._asdict())
-    
+        stepfiles, features = _get_eval_stepfiles_features()
+
+        mo.output.append(evaluate_validation_per_chart(stepfiles, features)._asdict())
+
     if evaluate_button.value:
         if evaluate_per_difficulty_checkbox.value:
             _evaluate_per_difficulty()
         else:
             _evaluate_all()
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    model_path_input = mo.ui.text(label='Model path')
+    save_button = mo.ui.run_button(label='Save model')
+    load_button = mo.ui.run_button(label='Load model')
+
+    mo.center(
+        mo.hstack([
+            mo.vstack([
+                mo.md('**Model loading**'),
+                model_path_input,
+
+                mo.hstack([load_button, save_button])
+            ]),
+    
+        ])
+    )
+    return load_button, model_path_input, save_button
+
+
+@app.cell(hide_code=True)
+def _(device, load_button, model, model_path_input, save_button, torch):
     if save_button.value:
-        _path = 'onset_model.pth'
+        _path = model_path_input.value or 'onset_model.pth'
         torch.save(model.state_dict(), _path)
-        print('Saved model to ', _path)
+        print('Saved model to', _path)
+
+    if load_button.value:
+        _path = model_path_input.value or 'onset_model.pth'
+        _state = torch.load(_path, weights_only=False, map_location=torch.device(device))
+        model.load_state_dict(_state)
+        print('Loaded model from', _path)
+
     return
 
 
@@ -377,8 +420,8 @@ def _(F, device, models, np, torch):
 
     sample_logistic_model = models.ppc.PumpPumpConvolutionLogisticOnset(channel_is_last=False).float().to(device)
 
-    logistic_sample_data = torch.tensor(np.random.randn(1, 100, 3, 15, 80)).type(torch.float32)
-    logistic_difficulty_data =F.one_hot(torch.tensor([15]), num_classes=25).type(torch.float32) 
+    logistic_sample_data = torch.tensor(np.random.randn(1, 100, 3, 15, 80)).type(torch.float32).to(device)
+    logistic_difficulty_data =F.one_hot(torch.tensor([15]), num_classes=25).type(torch.float32).to(device)
 
     print(logistic_sample_data.shape, logistic_difficulty_data.shape)
     return (
