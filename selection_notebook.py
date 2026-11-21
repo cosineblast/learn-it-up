@@ -48,7 +48,7 @@ def _(pickle, test_paths, training_paths, validation_paths):
     training_stepfiles   = _get_stepfiles(training_paths)
     test_stepfiles       = _get_stepfiles(test_paths)
     validation_stepfiles = _get_stepfiles(validation_paths)
-    return training_stepfiles, validation_stepfiles
+    return test_stepfiles, training_stepfiles, validation_stepfiles
 
 
 @app.cell
@@ -249,35 +249,110 @@ def _(
     return (evaluate_validation_per_chart,)
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
-    should_evaluate = mo.ui.run_button(label='Evaluate model')
-    should_evaluate
+    save_button = mo.ui.run_button(label='Save model')
+    load_button = mo.ui.run_button(label='Load model')
 
-    should_save = mo.ui.run_button(label='Save model')
+    model_path_input = mo.ui.text(label='Model path', value='selection_model.pth')
 
     mo.center(
-    mo.vstack([should_evaluate, should_save])
+        mo.vstack([
+            mo.md('**Save/Load model**'),
+
+            model_path_input,
+
+            mo.hstack([save_button, load_button])
+        ])
     )
-    return should_evaluate, should_save
+    return load_button, model_path_input, save_button
+
+
+@app.cell
+def _(
+    device,
+    load_button,
+    model_path_input,
+    save_button,
+    selection_model,
+    torch,
+):
+    if save_button.value:
+        _path = model_path_input.value 
+        torch.save(selection_model.state_dict(), _path)
+        print('Saved model to', _path)
+
+    if load_button.value:
+        _path = model_path_input.value 
+        _state = torch.load(_path, weights_only=False, map_location=torch.device(device))
+        selection_model.load_state_dict(_state)
+        print('Loaded from', _path)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    evaluate_button = mo.ui.run_button(label='Evaluate model')
+    evaluate_per_difficulty_checkbox = mo.ui.checkbox(label='Evaluate per difficulty')
+    evaluate_on_test_set_checkbox = mo.ui.checkbox(label='Evaluate in testing set')
+
+    mo.center(
+        mo.vstack([
+            mo.md('**Model Evaluation**'),
+            evaluate_per_difficulty_checkbox,
+            evaluate_on_test_set_checkbox,
+            evaluate_button
+        ])
+    )
+    return (
+        evaluate_button,
+        evaluate_on_test_set_checkbox,
+        evaluate_per_difficulty_checkbox,
+    )
 
 
 @app.cell(hide_code=True)
 def _(
+    evaluate_button,
+    evaluate_on_test_set_checkbox,
+    evaluate_per_difficulty_checkbox,
     evaluate_validation_per_chart,
     mo,
-    selection_model,
-    should_evaluate,
-    should_save,
-    torch,
+    test_stepfiles,
+    validation_stepfiles,
 ):
-    if should_evaluate.value:
-        mo.output.append(evaluate_validation_per_chart())
+    def _get_eval_stepfiles_features():
+        if evaluate_on_test_set_checkbox.value:
+            print('Evaluating on test set')
+            return test_stepfiles
+        else:
+            print('Evaluating on validation set')
+            return validation_stepfiles
 
-    if should_save.value:
-        _path = 'selection_model.pth' 
-        torch.save(selection_model.state_dict(), _path)
-        print('Saved model to', _path)
+    def _evaluate_per_difficulty():
+        stepfiles = _get_eval_stepfiles_features()
+
+        results = []
+
+        for difficulty in range(1, 26):
+            filtered_stepfiles = [stepfile._replace(charts = [chart for chart in stepfile.charts if chart.difficulty == difficulty]) 
+                          for stepfile in stepfiles]
+
+            if sum(len(stepfile.charts) for stepfile in filtered_stepfiles) > 0:
+                results.append(evaluate_validation_per_chart(filtered_stepfiles)._asdict())
+
+        mo.output.append(results)
+
+    def _evaluate_all():
+        stepfiles = _get_eval_stepfiles_features()
+
+        mo.output.append(evaluate_validation_per_chart(stepfiles)._asdict())
+        
+    if evaluate_button.value:
+        if evaluate_per_difficulty_checkbox.value:
+            _evaluate_per_difficulty()
+        else:
+            _evaluate_all()
     return
 
 
