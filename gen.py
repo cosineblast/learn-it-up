@@ -16,7 +16,7 @@ from rich import print
 
 FRAMES_PER_SECOND=100
 
-def generate_stepfile(audio_path,
+def generate_stepfile_cli(audio_path,
                       difficulty_str,
                       onset_model_path,
                       selection_model_path,
@@ -34,6 +34,7 @@ def generate_stepfile(audio_path,
     import loading
     import scipy
     import models
+    import models.ppc
     import numpy as np
 
     if seed is not None:
@@ -51,7 +52,7 @@ def generate_stepfile(audio_path,
 
     print("Loading selection model file {}...".format(selection_model_path), aaiau)
     selection_model_state = torch.load(selection_model_path, weights_only=False, map_location=torch.device(device))
-    selection_model = models.PumpItUpConvolutionSelectionLSTM()
+    selection_model = models.ppc.PumpItUpConvolutionSelectionLSTM()
     selection_model.load_state_dict(selection_model_state)
 
     print()
@@ -92,9 +93,9 @@ def load_onset_model(onset_model_path, threshold_file, cnn_onset, device):
     onset_model_state = torch.load(onset_model_path, weights_only=False, map_location=torch.device(device))
 
     if cnn_onset:
-        onset_model = models.PumpItUpConvolutionCNNOnset(channel_is_last=True)
+        onset_model = models.ppc.PumpItUpConvolutionCNNOnset(channel_is_last=True)
     else:
-        onset_model = models.PumpItUpConvolutionLSTMOnset(channel_is_last=True)
+        onset_model = models.ppc.PumpItUpConvolutionLSTMOnset(channel_is_last=True)
 
     onset_model.load_state_dict(onset_model_state)
 
@@ -102,7 +103,11 @@ def load_onset_model(onset_model_path, threshold_file, cnn_onset, device):
         thresholds = BEST_THRESHOLDS
     else:
         with open(threshold_file) as f:
-            thresholds = {int(key): value for key,value in json.load(f).items()}
+            thresholds = {int(key): float(value) for key,value in json.load(f).items()}
+            for key in BEST_THRESHOLDS:
+                if key not in thresholds:
+                    thresholds[key] = BEST_THRESHOLDS[key]
+                    
 
     return onset_model, thresholds
 
@@ -176,6 +181,7 @@ def run_selection_model(placements, selection_model, device):
     import torch
     import numpy as np
     import loading
+    import loading.ppc
     
     steps = []
 
@@ -190,7 +196,7 @@ def run_selection_model(placements, selection_model, device):
 
         x = (np.zeros((5, 4))
             if previous_prediction is None 
-            else loading.stepcode_to_bag_tensor(loading.index_to_stepcode(previous_prediction)))
+            else loading.ppc.stepcode_to_bag_tensor(loading.ppc.index_to_stepcode(previous_prediction)))
 
         x = x.reshape((1, 1, 5, 4))
         delta = delta.reshape((1, 1, 3))
@@ -206,7 +212,7 @@ def run_selection_model(placements, selection_model, device):
             log_scores = torch.flatten(log_scores,start_dim=0, end_dim=1)
             predictions = torch.argmax(F.softmax(log_scores, dim=1), dim=1).detach().cpu().numpy()
 
-        steps.append(loading.index_to_stepcode(predictions[0]))
+        steps.append(loading.ppc.index_to_stepcode(predictions[0]))
 
         previous_state = state
         previous_prediction = predictions[0]
@@ -318,7 +324,7 @@ def main():
 
     args = parser.parse_args()
 
-    generate_stepfile(audio_path=args.audio,
+    generate_stepfile_cli(audio_path=args.audio,
                       difficulty_str=args.difficulty,
                       onset_model_path=args.placement,
                       selection_model_path=args.selection,
