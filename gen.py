@@ -72,7 +72,68 @@ def generate_stepfile_cli(audio_path,
         task = progress.add_task(eeee, start=False, total=None)
         steps = run_selection_model(placements, selection_model, device)
 
-    build_stepfile(placements, steps, audio_path, result_path, difficulty_str)
+    build_stepfile(placements, steps, audio_path, None, result_path, difficulty_str)
+
+# TODO: inregrate these two functions into one
+
+def generate_stepfile(audio_path: str,
+                      audio_name: str | None,
+                      difficulty: int,
+                      onset_model_path: str,
+                      selection_model_path: str,
+                      result_path: str,
+                      device: str,
+                      seed: int | None =None,
+                      cnn_onset=False,
+                      threshold_file: str | None =None):
+
+    assert 1 <= difficulty <= 25
+
+    # print('Loading libraries... (let the bass kick)')
+
+    import torch
+
+    import audio_util
+    import models
+    import models.ppc
+
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    # print("Extracting audio features of [yellow]{}[/yellow]...".format(audio_path), joo1)
+
+    # with rich.progress.Progress() as progress:
+    loader = audio_util.AudioFeatureLoader(use_tqdm=False)
+    features = loader.load(audio_path)
+
+    # print("Loading onset model file {}...".format(onset_model_path), aae1)
+    onset_model, thresholds = load_onset_model(onset_model_path, threshold_file, cnn_onset, device)
+
+    # print()
+
+    # print("Loading selection model file {}...".format(selection_model_path), aaiau)
+    selection_model_state = torch.load(selection_model_path, weights_only=False, map_location=torch.device(device))
+    selection_model = models.ppc.PumpItUpConvolutionSelectionLSTM()
+    selection_model.load_state_dict(selection_model_state)
+
+    # print()
+
+    # print('Running onset model...', joo2)
+
+    # with rich.progress.Progress() as progress:
+    # task = progress.add_task(ooo2, start=False, total=None)
+    placements = run_onset_model(features, onset_model, difficulty, thresholds, device)
+
+    # print('Generated', len(placements), 'steps', aae2+oaauua)
+
+    # now run selection model
+    # print('Running selection model...', ee)
+
+    # with rich.progress.Progress() as progress:
+    # task = progress.add_task(eeee, start=False, total=None)
+    steps = run_selection_model(placements, selection_model, device)
+
+    build_stepfile(placements, steps, audio_path, audio_name, result_path, f'S{difficulty}')
 
 # Brain power lyrics
 joo1 = '([bold][red]JOOOOOOOO[/red][/bold])'
@@ -233,13 +294,17 @@ def check_difficulty(difficulty_str):
     return difficulty
     
 
-def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
+def build_stepfile(placements, steps, audio_path, audio_name, result_path, chart_description):
     import msdparser
 
     stepfile=[]
 
     def add(key, value):
         stepfile.append(msdparser.MSDParameter([key, value]))
+
+    music_entry = (audio_name if audio_name is not None
+        else Path(audio_path).name if Path(audio_path).parent.absolute() == Path(result_path).parent.absolute()
+        else str(Path(audio_path).absolute()))
 
     add('VERSION', '0.83')
     add('TITLE', 'unknown')
@@ -250,9 +315,7 @@ def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
     add('ARTISTTRANSLIT', '')
     add('GENRE', '')
     add('CREDIT', '')
-    add('MUSIC',
-        Path(audio_path).name if Path(audio_path).parent.absolute() == Path(result_path).parent.absolute()
-        else str(Path(audio_path).absolute()))
+    add('MUSIC', music_entry)
     add('BANNER', '')
     add('BACKGROUND', '')
     add('CDTITLE', '')
@@ -267,7 +330,7 @@ def build_stepfile(placements, steps, audio_path, result_path, difficulty_str):
     add('NOTEDATA', '')
 
     add('STEPSTYPE', 'pump-single');
-    add('DESCRIPTION', '');
+    add('DESCRIPTION', chart_description);
     add('DIFFICULTY', 'Edit');
     add('METER', '15');
     add('RADARVALUES', '0,0,0,0,0');

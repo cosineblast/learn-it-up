@@ -13,3 +13,4 @@ samples
 *.pth
 *.tar.gz
 *.zip
+thresholds.json

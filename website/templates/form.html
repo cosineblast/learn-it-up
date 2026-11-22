@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+
+  <title> cosineblast </title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/reset.css">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body>
+  <nav>
+    <a href="/">
+      <nav-title> Renan Ribeiro </nav-title>
+      <sub-title> a.k.a cosineblast </sub-title>
+    </a>
+    <ul>
+      <li> <a href="https://cosineblast.xyz/blog"> BLOG </a> </li>
+      <li> <a href="https://github.com/cosineblst"> GITHUB </a> </li>
+      <li> <a href="https://cosineblast.xyz/learn-it-up"> TCC </a> </li>
+      <li> <a href="/"> PUMPGEN </a> </li>
+    <ul>
+  </nav>
+
+  <main>
+    <h1> Learn it Up - PumpGen </h1>
+    This is the early access UI page for the Learn it Up chart generation project. Some important things to consider:
+
+    <ul>
+      <li>This is a very early prototype.</li>
+      <li>This is a VERY early prototype.</li>
+      <li>Difficulty generation is only approximate.</li>
+
+      <!--
+      <li>Step placement is per-frame, not per-beat</li>
+      <li>Step placement is per-frame, not per-beat</li> -->
+    </ul>
+
+      <form method="post" enctype="multipart/form-data">
+        <h2> Generate Chart </h2>
+
+        {% if error %}
+          <p> <strong class="error-text">ERROR:</strong> <strong>{{error}}</strong> </p>
+        {% endif %}
+
+        <label for="file">Music file:</label>
+        <input type="file" id="file" name="file" accept=".mp3" />
+
+        <div> <small> Max size: 16MB </small> </div>
+
+        <div>
+          <label for="difficulty">Chart difficulty</label>
+
+          <select id="difficulty" name="difficulty">
+            <option value="2">S2</option>
+            <option value="3">S3</option>
+            <option value="4">S4</option>
+            <option value="5">S5</option>
+            <option value="6">S6</option>
+            <option value="7">S7</option>
+            <option value="8">S8</option>
+            <option value="9">S9</option>
+            <option value="10">S10</option>
+            <option value="11">S11</option>
+            <option value="12">S12</option>
+            <option value="13">S13</option>
+            <option value="14">S14</option>
+            <option value="15">S15</option>
+            <option value="16" selected>S16</option>
+            <option value="17">S17</option>
+            <option value="18">S18</option>
+            <option value="19">S19</option>
+            <option value="20">S20</option>
+            <option value="21">S21</option>
+            <option value="22">S22</option>
+            <option value="23">S23</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="seed">Seed:</label>
+          <input type="number" id="seed" name="seed" min="1" max="99999" value="42" />
+        </div>
+
+        <button>Generate</button>
+      </form>
+  </main>
+
+  <footer>
+    © Renan Ribeiro Marcelino
+  </footer>
+</body>
+
+
+</html>
+

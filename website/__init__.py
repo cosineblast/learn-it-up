@@ -1,0 +1,115 @@
+import os
+import re
+import tempfile
+import tomllib
+
+from flask import Flask, render_template, request, send_file
+from werkzeug.datastructures import FileStorage
+
+import gen
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config['ONSET_MODEL_PATH'] = 'website_onset_model.pth'
+app.config['SELECTION_MODEL_PATH'] = 'website_selection_model.pth'
+app.config['THRESHOLD_FILE_PATH'] = 'thresholds.json'
+
+if os.path.isfile('config.toml'):
+    app.config.from_file('config.toml', load=tomllib.load, text=False)
+app.config.from_prefixed_env()
+
+
+@app.route("/", methods=["GET", "POST"])
+def hello_world():
+    if request.method == "POST":
+        return process_form()
+    else:
+        return render_template("form.html")
+
+
+VALID_DIFFICULTIES = {str(x) for x in range(2, 24)}
+
+ALLOWED_EXTENSIONS = {'.mp3', '.ogg'}
+
+def is_filename_allowed(filename):
+    return os.path.splitext(filename)[1] in ALLOWED_EXTENSIONS
+
+class Error:
+    def __init__(self, message):
+        self.message = message
+    
+
+def parse_form() -> Error | tuple[int, int, FileStorage]:
+    if 'difficulty' not in request.form:
+        return Error("Missing difficulty")
+
+    difficulty = request.form["difficulty"]
+
+    if difficulty not in VALID_DIFFICULTIES:
+        return Error("Invalid difficulty")
+
+    if 'seed' not in request.form:
+        return Error("Missing seed")
+    seed = request.form["seed"]
+
+    if not re.fullmatch(r"\d{1,4}", seed):
+        return Error("Invalid seed")
+
+    if 'file' not in request.files:
+        return Error('Missing music file')
+
+    form_file = request.files['file']
+
+    if not form_file or form_file.filename == '':
+        return Error('No selected file')
+
+    if not is_filename_allowed(form_file.filename):
+        return Error('File extension not allowed')
+
+    return int(difficulty), int(seed), form_file
+
+
+
+def process_form():
+    result  = parse_form()
+
+    if isinstance(result, Error):
+        return render_template("form.html", error=result.message)
+
+    difficulty, seed, form_file = result
+
+    with tempfile.NamedTemporaryFile() as input_file:
+        form_file.save(input_file)
+
+        # we need to not use a named tempfile here because send_file closes the file
+        out_file = tempfile.NamedTemporaryFile()
+
+        try:
+            gen.generate_stepfile(
+                audio_path=input_file.name,
+                audio_name=form_file.filename,
+                difficulty=difficulty,
+                onset_model_path=app.config['ONSET_MODEL_PATH'],
+                selection_model_path=app.config['SELECTION_MODEL_PATH'],
+                result_path=out_file.name,
+                device='cpu',
+                seed=seed,
+                cnn_onset=False,
+                threshold_file=app.config['THRESHOLD_FILE_PATH']
+            )
+
+            out_file.seek(0)
+        except Exception:
+            out_file.close()
+            raise
+
+        download_filename  = os.path.splitext(str(form_file.filename))[0] + '.ssc'
+
+        return send_file(out_file, mimetype='application/octet-stream', as_attachment=True, download_name=download_filename)
+
+
+
+    # generate chart from file
+    # serve answer
+    
+
