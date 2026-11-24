@@ -1,7 +1,9 @@
+import hmac
 import os
 import re
 import tempfile
 import tomllib
+import uuid
 
 from flask import Flask, render_template, request, send_file
 from werkzeug.datastructures import FileStorage
@@ -13,11 +15,13 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['ONSET_MODEL_PATH'] = 'website_onset_model.pth'
 app.config['SELECTION_MODEL_PATH'] = 'website_selection_model.pth'
 app.config['THRESHOLD_FILE_PATH'] = 'thresholds.json'
+app.config['USAGE_KEY'] = str(uuid.uuid4())
 
 if os.path.isfile('config.toml'):
     app.config.from_file('config.toml', load=tomllib.load, text=False)
 app.config.from_prefixed_env()
 
+print('Running with key', app.config['USAGE_KEY'])
 
 @app.route("/", methods=["GET", "POST"])
 def hello_world():
@@ -39,7 +43,7 @@ class Error:
         self.message = message
     
 
-def parse_form() -> Error | tuple[int, int, FileStorage]:
+def parse_form() -> Error | tuple[int, int, str, FileStorage]:
     if 'difficulty' not in request.form:
         return Error("Missing difficulty")
 
@@ -55,6 +59,10 @@ def parse_form() -> Error | tuple[int, int, FileStorage]:
     if not re.fullmatch(r"\d{1,4}", seed):
         return Error("Invalid seed")
 
+    if 'key' not in request.form:
+        return Error('Missing usage key')
+    key = request.form['key']
+
     if 'file' not in request.files:
         return Error('Missing music file')
 
@@ -66,7 +74,7 @@ def parse_form() -> Error | tuple[int, int, FileStorage]:
     if not is_filename_allowed(form_file.filename):
         return Error('File extension not allowed')
 
-    return int(difficulty), int(seed), form_file
+    return int(difficulty), int(seed), key, form_file
 
 
 
@@ -76,7 +84,10 @@ def process_form():
     if isinstance(result, Error):
         return render_template("form.html", error=result.message)
 
-    difficulty, seed, form_file = result
+    difficulty, seed, key, form_file = result
+
+    if not hmac.compare_digest(app.config['USAGE_KEY'], key):
+        return render_template("form.html", error='bad key :/')
 
     with tempfile.NamedTemporaryFile() as input_file:
         form_file.save(input_file)

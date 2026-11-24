@@ -43,6 +43,10 @@ python3 gen.py samples/OshamaScramble.mp3 \
 
 For more information, run `python3 gen.py --help`
 
+## Running the website
+
+The website is a simple flask traditional server developed in the directory `website`. A dockerfile for deployment aid is also provided.
+
 ## Pipeline
 
 The processing pipeline consists of:
