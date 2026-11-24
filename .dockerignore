@@ -1,0 +1,16 @@
+__marimo__
+build
+__pycache__
+env
+PIU-Simfiles
+data/songs
+data/parsed
+data/partitions.json
+data/features
+samples
+.venv
+.hypothesis
+*.tar.gz
+*.zip
+.dockerignore
+Dockerfile
