@@ -20,10 +20,6 @@ if os.path.isfile('config.toml'):
     app.config.from_file('config.toml', load=tomllib.load, text=False)
 app.config.from_prefixed_env()
 
-assert 'USAGE_KEY' in app.config, (
-    'Error: The USAGE_KEY for deployment is not defined.'
-    '(Can be set with FLASK_USAGE_KEY environment variable)')
-
 @app.route("/", methods=["GET", "POST"])
 def hello_world():
     if request.method == "POST":
