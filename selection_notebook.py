@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.25.2"
 app = marimo.App(width="medium")
 
 
@@ -222,7 +222,7 @@ def _(
     validation_stepfiles,
 ):
     FullStepEvaluation = namedtuple('FullStepEvaluation', 
-                                ['avg_loss', 'avg_accuracy', 'avg_scaled_matrix', 'class_precisions', 'class_recalls', 'class_f1s'])
+                                ['avg_loss', 'avg_accuracy', 'avg_scaled_matrix'])
 
     def evaluate_validation_per_chart(stepfiles=validation_stepfiles):
         chart_count = sum(len(stepfile.charts) for stepfile in stepfiles)
@@ -246,8 +246,7 @@ def _(
 
         return FullStepEvaluation(sum_mean_loss / chart_count, 
                                   sum_accuracy / chart_count, 
-                                  sum_matrix / chart_count, 
-                                  *evaluation.selection_confusion_matrix_to_class_stats(sum_matrix))
+                                  sum_matrix / chart_count)
 
     return (evaluate_validation_per_chart,)
 
@@ -271,7 +270,7 @@ def _(mo):
     return load_button, model_path_input, save_button
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     device,
     load_button,
@@ -342,20 +341,59 @@ def _(
                           for stepfile in stepfiles]
 
             if sum(len(stepfile.charts) for stepfile in filtered_stepfiles) > 0:
-                results.append(evaluate_validation_per_chart(filtered_stepfiles)._asdict())
+                value = evaluate_validation_per_chart(filtered_stepfiles)._asdict() 
+                value['difficulty'] = difficulty
+                results.append(value)
 
         mo.output.append(results)
+
+        global evaluation_results
+        evaluation_results = results
+
+    evaluation_results = None
 
     def _evaluate_all():
         stepfiles = _get_eval_stepfiles_features()
 
-        mo.output.append(evaluate_validation_per_chart(stepfiles)._asdict())
-        
+        results = evaluate_validation_per_chart(stepfiles)._asdict()
+
+        mo.output.append(results)
+
+        global evaluation_results
+        evaluation_results = results
+
     if evaluate_button.value:
         if evaluate_per_difficulty_checkbox.value:
             _evaluate_per_difficulty()
         else:
             _evaluate_all()
+    return (evaluation_results,)
+
+
+@app.cell(hide_code=True)
+def _(evaluate_per_difficulty_checkbox, evaluation, evaluation_results, np):
+    ## Difficulty-Accuracy correlation
+
+    def correlation(a, b):
+        covariance = np.mean((a - np.mean(a)) * (b - np.mean(b)))
+        return covariance / (np.std(a) * np.std(b))
+
+    if evaluation_results is not None: 
+        if evaluate_per_difficulty_checkbox.value:
+            _difficulties = np.array([entry['difficulty'] for entry in evaluation_results])
+            _accuracies = np.array([entry['avg_accuracy'] for entry in evaluation_results])
+
+            _correlation = correlation(_difficulties, _accuracies)
+
+            print('Difficulty-accuracy-correlation:', _correlation)
+        else:
+            _precisions, _recalls, _f1s = evaluation.selection_confusion_matrix_to_class_stats(evaluation_results['avg_scaled_matrix'])
+            print('Precisions:', _precisions)
+            print('Recalls:', _recalls)
+            print('F1s:', _f1s)
+
+
+
     return
 
 
