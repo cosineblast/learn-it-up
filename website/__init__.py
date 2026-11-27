@@ -3,10 +3,10 @@ import os
 import re
 import tempfile
 import tomllib
-import uuid
 
 from flask import Flask, render_template, request, send_file
 from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 import gen
 
@@ -15,13 +15,14 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['ONSET_MODEL_PATH'] = 'website_onset_model.pth'
 app.config['SELECTION_MODEL_PATH'] = 'website_selection_model.pth'
 app.config['THRESHOLD_FILE_PATH'] = 'thresholds.json'
-app.config['USAGE_KEY'] = str(uuid.uuid4())
 
 if os.path.isfile('config.toml'):
     app.config.from_file('config.toml', load=tomllib.load, text=False)
 app.config.from_prefixed_env()
 
-print('Running with key', app.config['USAGE_KEY'])
+assert 'USAGE_KEY' in app.config, (
+    'Error: The USAGE_KEY for deployment is not defined.'
+    '(Can be set with FLASK_USAGE_KEY environment variable)')
 
 @app.route("/", methods=["GET", "POST"])
 def hello_world():
@@ -92,7 +93,7 @@ def process_form():
     with tempfile.NamedTemporaryFile() as input_file:
         form_file.save(input_file)
 
-        # we need to not use a named tempfile here because send_file closes the file
+        # we need to not use a with clause here because send_file closes the file
         out_file = tempfile.NamedTemporaryFile()
 
         try:
@@ -110,17 +111,11 @@ def process_form():
             )
 
             out_file.seek(0)
+
+            download_filename  = os.path.splitext(secure_filename(str(form_file.filename)))[0] + '.ssc'
         except Exception:
             out_file.close()
             raise
 
-        download_filename  = os.path.splitext(str(form_file.filename))[0] + '.ssc'
 
         return send_file(out_file, mimetype='application/octet-stream', as_attachment=True, download_name=download_filename)
-
-
-
-    # generate chart from file
-    # serve answer
-    
-
