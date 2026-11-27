@@ -3,15 +3,10 @@
 # loading refined ssc files and audio feature files into the input formats
 # expected by the models.
 
-from collections import namedtuple 
+import pickle
+import typing
 
 import numpy as np
-import torch
-import pickle
-
-import random
-
-import typing
 
 """
 A featureview is a tuple that represents a slice of the content of a features array.

@@ -1,7 +1,7 @@
 
-import torch.nn as nn
-import numpy as np
 import torch
+from torch import nn
+
 
 class PumpPumpConvolutionLogisticOnset(nn.Module):
     def __init__(self, dropout=0.5, channel_is_last=False):
@@ -254,6 +254,7 @@ class PumpItUpConvolutionLSTMOnset(nn.Module):
 
 
 from dataclasses import dataclass
+
 
 class PumpItUpConvolutionSelectionLSTM(nn.Module):
 

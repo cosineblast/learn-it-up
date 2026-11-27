@@ -1,22 +1,15 @@
-from tracemalloc import start
-from black.output import diff
-
-from math import floor
-from collections import namedtuple 
-
+import functools
 import itertools
+from collections import namedtuple
+from math import floor
+
 import numpy as np
 import torch
 
-import random
-import functools
-
+import audio_util
 import loading
 from loading import FeatureView
-
-import audio_util
-
-from ssc_util import RefinedStepFile, RefinedChart, StepInfo
+from ssc_util import RefinedChart, RefinedStepFile, StepInfo
 
 CONTEXT_RADIUS = loading.CONTEXT_RADIUS
 FRAMES_PER_SECOND = 100 
