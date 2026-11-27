@@ -1,5 +1,7 @@
 NEXT:
 - Include difficulty in step selection
+- OshamaScramble seed 123
+- Constant bitrate
 
 TEXT TODO:
 - Explain DDCL issues 
@@ -8,6 +10,10 @@ TEXT TODO:
 - Talk about end-of-hold in essay (link to it in discussion)
 - Talk about aligned generation, stuff and stuff in essay
 - Solve minor TODOs
+
+WEBSITE TODO:
+- ffmpeg before processing stuff in website
+- add multiple access keys
 
 CODE TODO:
 - Rename PumpItUpConvolution classes to PumpPumpConvolution

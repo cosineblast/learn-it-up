@@ -139,23 +139,25 @@ def frame_of(step):
 
 StepEvaluation = namedtuple('StepEvaluation', ['mean_loss', 'accuracy', 'confusion_matrix'])
 
-def measure_selection_performance(model, chart, loss_fn, device):
+def measure_selection_performance(model, chart, loss_fn, extra_feature_transform, device):
 
-    x, delta, y = loading.ppc.steps_to_model_input(chart.steps, 0, len(chart.steps))
+    data = loading.ppc.steps_to_model_input(chart.steps, 0, len(chart.steps), chart.difficulty)
+
+    x, extra, y = extra_feature_transform(data)
 
     real_y = y
 
     x = np.stack([x])
-    delta = np.stack([delta])
+    extra = np.stack([extra])
     y = np.stack([y])
 
     # running the model
     with torch.no_grad():
         x = torch.tensor(x).float().to(device)
-        delta = torch.tensor(delta).float().to(device)
+        extra = torch.tensor(extra).float().to(device)
         y = torch.tensor(y).to(device)
 
-        log_scores = model(x, delta)
+        log_scores = model(x, extra)
 
         log_scores = torch.flatten(log_scores,start_dim=0, end_dim=1)
         y = torch.flatten(y)

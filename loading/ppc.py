@@ -1,3 +1,5 @@
+from tracemalloc import start
+from black.output import diff
 
 from math import floor
 from collections import namedtuple 
@@ -7,6 +9,7 @@ import numpy as np
 import torch
 
 import random
+import functools
 
 import loading
 from loading import FeatureView
@@ -106,8 +109,7 @@ def lstm_onset_getitem(chart, music_frames, index, unroll_length):
     frames = _lstm_onset_frame_context(music_frames, block_first_frame, block_last_frame)
 
     block_length = block_last_frame - block_first_frame + 1
-    difficulty = np.zeros(25)
-    difficulty[chart.difficulty-1] = 1.0
+    difficulty = difficulty_to_onehot(chart.difficulty)
 
     first_next_step = _lstm_onset_next_step_index(chart.steps, block_first_frame)
     last_next_step = _lstm_onset_next_step_index(chart.steps, block_last_frame)
@@ -297,7 +299,10 @@ class PPC_SelectionLSTMDataset(PerChartDataset):
     Yields:
     - X: (N x 5 x 4) np tensor containing the input steps
     - Delta: (N x 3) np tensor containing step time related info
+    - Difficulty: (N x 25) np tensor containing diffifulty related info
     - y: (N,) integer np tensor containing the one-hot index of the next steps of the sequence
+
+    Use MergeExtraFeaturesTransform to concat Delta and Difficulty
     """
 
     def __init__(self, stepfiles: list[RefinedStepFile], unroll_length: int, transform=(lambda x:x)):
@@ -312,8 +317,25 @@ class PPC_SelectionLSTMDataset(PerChartDataset):
             getitem=lambda chart, features, index: transform(lstm_selection_getitem(chart, index,unroll_length)),
             chartlen=lambda chart: lstm_selection_chart_len(chart, unroll_length),
             stepfiles=stepfiles,
+
+            # TODO: make parent class generic so this does not type error
             features=[() for _ in stepfiles]
         )
+
+    @staticmethod
+    def MergeExtraFeaturesTransform(*, delta: bool, difficulty: bool):
+        none_enabled = sum([delta, difficulty]) == 0
+        
+        def transform(stuff):
+            x, delta_vector, difficulty_vector, y = stuff
+
+            vectors = [(delta, delta_vector), (difficulty, difficulty_vector)]
+
+            extra_vector = (np.zeros((delta_vector.shape[0], 0)) if none_enabled else
+                    np.concatenate([vector for is_enabled, vector in vectors if is_enabled], axis=1))
+
+            return (x, extra_vector, y)
+        return transform
 
 def lstm_selection_chart_len(chart, unroll_length):
     return (len(chart.steps) // unroll_length) + bool(len(chart.steps) % unroll_length)
@@ -328,7 +350,7 @@ def lstm_selection_getitem(chart, index, unroll_length):
     # block length may be shorter than unroll_length
     end_index = start_index + len(block)
 
-    return steps_to_model_input(chart.steps, start_index, end_index)
+    return steps_to_model_input(chart.steps, start_index, end_index, chart.difficulty)
 
 def _binary_search_index(sums, target_index: int) -> tuple[int, int]:
     """
@@ -360,7 +382,7 @@ def _binary_search_index(sums, target_index: int) -> tuple[int, int]:
 
     
 
-def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int, difficulty: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Given a list of StepInfo values, this function  returns
     the selection model bag-of-arrows np tensor input for the steps in the given range.
@@ -384,38 +406,29 @@ def steps_to_model_input(steps: list[StepInfo], start_index: int, end_index: int
 
     delta = np.stack([deltaof(i) for i in range(start_index, end_index)])
 
+    difficulty_onehot = np.stack([difficulty_to_onehot(difficulty) for _ in range(start_index, end_index)])
+
     y = np.stack([
         stepcode_to_index(steps[i].stepcode)
         for i in range(start_index, end_index)
     ])
 
-    return x, delta, y
+    return x, delta, difficulty_onehot, y
 
-_bag_of_arrows_cache = {}
+@functools.cache
 def stepcode_to_bag_tensor(stepcode: str) -> np.ndarray:
-    if stepcode in _bag_of_arrows_cache:
-        return _bag_of_arrows_cache[stepcode]
-
     result = np.zeros((5, 4))
 
     for i, char in enumerate(stepcode):
         result[i, int(char)] = 1.0
 
-    _bag_of_arrows_cache[stepcode] = result
     return result
 
-_index_cache = {}
+@functools.cache
 def stepcode_to_index(_stepcode: str) -> int:
-    if _stepcode in _index_cache:
-        return _index_cache[_stepcode]
-
     stepcode = list(map(int, _stepcode))
 
-    index = stepcode[0] + 4*stepcode[1] + 16* stepcode[2] + 64 * stepcode[3] + 256* stepcode[4]
-
-    _index_cache[_stepcode] = index
-
-    return index
+    return stepcode[0] + 4*stepcode[1] + 16* stepcode[2] + 64 * stepcode[3] + 256* stepcode[4]
 
 def index_to_stepcode(index: int) -> str:
     stepcode = [0, 0, 0, 0, 0]
@@ -426,3 +439,8 @@ def index_to_stepcode(index: int) -> str:
     stepcode[4] = (index // 256) % 4
     return ''.join(map(str, stepcode))
 
+def difficulty_to_onehot(difficulty: int) -> np.ndarray:
+    assert 1 <= difficulty <= 25
+    result = np.zeros(25)
+    result[difficulty-1] = 1.0
+    return result

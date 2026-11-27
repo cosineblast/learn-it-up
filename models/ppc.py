@@ -261,21 +261,27 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
     class Settings:
         rnn_size: int = 128
         rnn_layers: int = 2
-        delta_features: int = 3
+        extra_features: int = 3
         
     def __init__(self, settings = Settings()):
         super().__init__()
 
+        self.settings = settings
+
         # Input: 
         # - X: (Batch x UnrollLength x 5 x 4) tensor with the bag-of-arrows representation of the steps
-        # - DeltaTime: (Batch x UnrollLength x 3) value representing the amout of time in seconds since the last and next step, and whether it is the first step or not
+        # Extra Features:
+        # - (Batch x UnrollLength x k) tensor possibly containing:
+        #   DeltaTime: 3 values representing the amount of time in seconds since the last and next step, and whether it is the first step or not
+        #   Difficulty: 25 values with the one hot representation of the chart difficulty
+        #   
         # Where:
         # - 5 is the number of steps of the game (down left, up left, center, up right, down right)
         # - 4 is the one-hot for the arrow (disabled, step, start hold, end hold)
         # Output: (Batch x UnrollLength x 4^5) tensor containing the pre-softmax scores for the next step to be placed
 
         self.rnn_projection = nn.Linear(
-            in_features=5*4 + settings.delta_features,
+            in_features=5*4 + settings.extra_features,
             out_features=settings.rnn_size,
         )
 
@@ -294,24 +300,24 @@ class PumpItUpConvolutionSelectionLSTM(nn.Module):
             )
         )
 
-    def forward(self, x, delta, initial_state=None, return_state=False):
+    def forward(self, x, extra, initial_state=None, return_state=False):
         batch = x.shape[0]
         unroll = x.shape[1]
         assert x.shape[2] == 5
         assert x.shape[3] == 4
 
-        assert delta.shape[0] == batch
-        assert delta.shape[1] == unroll
-        assert delta.shape[2] == 3
+        assert extra.shape[0] == batch
+        assert extra.shape[1] == unroll
+        assert extra.shape[2] == self.settings.extra_features
 
         # Batch x Unroll x 5 x 4
         flattened_x = torch.flatten(x, start_dim=2)
 
         # X: Batch x Unroll x 20
-        # Diff: Batch x Unroll x 2
-        concated = torch.concat([flattened_x, delta], dim=2)
+        # Extra: Batch x Unroll x k
+        concated = torch.concat([flattened_x, extra], dim=2)
 
-        # Batch x Unroll x 22
+        # Batch x Unroll x (20 + k)
         projected = self.rnn_projection(concated)
 
         # Batch x Unroll x RNNSize

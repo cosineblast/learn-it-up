@@ -335,7 +335,7 @@ class TestStepSelectionDataset(unittest.TestCase):
         stepfiles = [stepfile_of([self.chart])]
         dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
 
-        x, delta, y = dataset[0]
+        x, delta, _diff, _y = dataset[0]
 
         self.assertEqual(np.sum(x), 0)
         self.assertEqual(delta[0][0], 0.0)
@@ -346,7 +346,7 @@ class TestStepSelectionDataset(unittest.TestCase):
         dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
 
         for i in range(1, len(dataset)):
-            x, delta, y = dataset[i]
+            x, _delta, _diff, _y = dataset[i]
             np.testing.assert_array_equal(x[0], loading.ppc.stepcode_to_bag_tensor(self.chart.steps[i-1].stepcode))
 
     def test_delta_ok(self):
@@ -354,15 +354,24 @@ class TestStepSelectionDataset(unittest.TestCase):
         dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
 
         for i in range(1, len(dataset)):
-            x, delta, y = dataset[i]
+            _x, delta, _diff, _y = dataset[i]
             self.assertEqual(delta[0][2], 0.0)
+
+    def test_diff_ok(self):
+        stepfiles = [stepfile_of([self.chart])]
+        dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
+
+        for i in range(1, len(dataset)):
+            _x, delta, diff, _y = dataset[i]
+            self.assertEqual(diff[0][10], 1.0)
+            self.assertEqual(np.sum(diff[0]), 1.0)
 
     def test_y_ok(self):
         stepfiles = [stepfile_of([self.chart])]
         dataset = loading.ppc.PPC_SelectionLSTMDataset(stepfiles, 1)
 
         for i in range(len(dataset)):
-            x, delta, y = dataset[i]
+            _x, _delta, _diff, y = dataset[i]
             self.assertEqual(y, loading.ppc.stepcode_to_index(self.chart.steps[i].stepcode))
 
 
@@ -508,6 +517,11 @@ class TestAlignedPPCDataset(unittest.TestCase):
             for i in range(32):
                 self.assertEqual(x[0, 2, i, 0, 0], int(50*beat + 50 * i/32))
 
+
+class TestStepCodeConversions(unittest.TestCase):
+    def test_index_to_stepcode_reversible(self):
+        for index in range(4**5):
+            assert loading.ppc.stepcode_to_index(loading.ppc.index_to_stepcode(index)) == index
 
 def irange(a, b):
     return range(a, b+1)

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.25.2"
+__generated_with = "0.23.9"
 app = marimo.App(width="medium")
 
 
@@ -58,11 +58,45 @@ def _():
     return BATCH_SIZE, UNROLL
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    delta_checkbox = mo.ui.checkbox(label='Delta time features')
+    difficulty_checkbox = mo.ui.checkbox(label='Difficulty features')
+
+    mo.center(
+        mo.vstack([
+            mo.md('**Feature configuration**'),
+            delta_checkbox,
+            difficulty_checkbox
+        ])
+    )
+    return delta_checkbox, difficulty_checkbox
+
+
+@app.cell(hide_code=True)
+def _(delta_checkbox, difficulty_checkbox, loading):
+    # Preparing extra features
+
+    extra_feature_count = delta_checkbox.value * 3 + difficulty_checkbox.value * 25 
+
+    extra_feature_transform =  loading.ppc.PPC_SelectionLSTMDataset.MergeExtraFeaturesTransform(
+            delta=delta_checkbox.value,
+            difficulty=difficulty_checkbox.value
+    )
+
+    print('Using', extra_feature_count, 'extra features.')
+    return extra_feature_count, extra_feature_transform
+
+
 @app.cell
-def _(UNROLL, loading, training_stepfiles):
+def _(UNROLL, extra_feature_transform, loading, training_stepfiles):
+    # Creating dataset
+
+    _transform = loading.compose([extra_feature_transform, loading.MaskAndPaddingTransform(UNROLL) ])
+
     training_dataset = loading.ppc.PPC_SelectionLSTMDataset(training_stepfiles, unroll_length=UNROLL,
-                                                                       transform=loading.MaskAndPaddingTransform(UNROLL))
-    len(training_dataset)
+                                                                       transform=_transform)
+    print('Dataset item count:', len(training_dataset))
     return (training_dataset,)
 
 
@@ -73,11 +107,30 @@ def _(BATCH_SIZE, DataLoader, training_dataset):
 
 
 @app.cell
-def _(device, models):
-    Model = models.ppc.PumpItUpConvolutionSelectionLSTM 
-    selection_model = Model().float().to(device)
+def _(device, extra_feature_count, models):
+    # Creating model instance
+
+    selection_model = models.ppc.PumpItUpConvolutionSelectionLSTM(
+        settings=models.ppc.PumpItUpConvolutionSelectionLSTM.Settings(
+            extra_features=extra_feature_count
+        )
+    ).float().to(device)
     selection_model
     return (selection_model,)
+
+
+@app.cell(hide_code=True)
+def _(device, extra_feature_count, selection_model, torch, training_dataset):
+    # Verifying consistency
+
+    _x, _extra, _y, _mask = training_dataset[0]
+
+    assert _extra.shape[1] == extra_feature_count
+
+    _ = selection_model(
+        torch.tensor(_x[None, :]).float().to(device), 
+        torch.tensor(_extra[None, :]).float().to(device))
+    return
 
 
 @app.cell
@@ -214,6 +267,7 @@ def _(epoch_count, should_train, train_epochs):
 def _(
     device,
     evaluation,
+    extra_feature_transform,
     loss_fn,
     mo,
     namedtuple,
@@ -236,7 +290,7 @@ def _(
         with mo.status.progress_bar(total=chart_count, title='Validating', remove_on_exit=True) as bar:
             for stepfile in stepfiles:
                 for chart in stepfile.charts:
-                    result = evaluation.measure_selection_performance(selection_model, chart, loss_fn, device)
+                    result = evaluation.measure_selection_performance(selection_model, chart, loss_fn, extra_feature_transform, device)
 
                     sum_mean_loss += result.mean_loss
                     sum_accuracy += result.accuracy
@@ -391,9 +445,6 @@ def _(evaluate_per_difficulty_checkbox, evaluation, evaluation_results, np):
             print('Precisions:', _precisions)
             print('Recalls:', _recalls)
             print('F1s:', _f1s)
-
-
-
     return
 
 
@@ -413,15 +464,15 @@ def _(device, np, torch):
 
 
 @app.cell
-def _(device, np, torch):
-    delta_time_data = torch.tensor(np.random.rand(20, 10, 3)).float().to(device)
-    delta_time_data.shape
-    return (delta_time_data,)
+def _(device, extra_feature_count, np, torch):
+    extra_data = torch.tensor(np.random.rand(20, 10, extra_feature_count)).float().to(device)
+    extra_data.shape
+    return (extra_data,)
 
 
 @app.cell
-def _(delta_time_data, selection_model, step_data):
-    selection_model(step_data, delta_time_data)
+def _(extra_data, selection_model, step_data):
+    selection_model(step_data, extra_data)
     return
 
 

@@ -81,7 +81,7 @@ def get_all_song_context_features(features_view: FeatureView, first_frame: int, 
 
 def MaskAndPaddingTransform(unroll_length: int, skip: int | None = None):
     """
-    This transform function takes a tuple containing multiple tensors X1, ..., Xn of
+    This transform function takes a tuple containing multiple tensors X1, ..., Xr of
     possibly different shapes, but all matching the size of their their main axis as `k` (X1.shape[0] = ... = Xn.shape[0] = k).
     If k is less than the unroll length n, then all those vectors are padded with zeroes in their main axis to size n.
     Additionally, an additional element `mask` is added to the returned tuple, containing a vector of shape (n,) with ones
@@ -103,3 +103,14 @@ def MaskAndPaddingTransform(unroll_length: int, skip: int | None = None):
         return *new_stuff, mask
 
     return maskAndPad  
+
+def compose(transforms: list):
+    def final(x):
+        current = x
+
+        for transform in transforms:
+            current = transform(current)
+
+        return current
+
+    return final
